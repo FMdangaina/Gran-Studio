@@ -35,6 +35,7 @@ obj/
 
 # Research and test material, local only
 Geom_research/
+ref/
 tests/
 scratch/
 

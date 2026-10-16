@@ -14,7 +14,8 @@ Done when every table offset/count is explained and checked on all files
 
 - [x] 2a. `gtdev mdl3-survey`: 24,922 MDL3 found, versions per folder, header ranges (cars: GT5 v8, GT6 v14)
 - [x] 2b. Fixed blocks verified (materials 0xE4, SHDS 0xFC, TXS3, PMSH in v14) and key tables (name -> index)
-- [ ] 2c. models and shapes records (0x30 + sub-data)
+- [x] 2c. models and shapes records; model command streams decode exactly on all 4630 car files, every shape is drawn by a model
+  (open: meaning of the switch values, shape flags; vertex/packed data is item 4)
 - [ ] 2d. fvf (vertex format) records
 - [ ] 2e. materials / shaders / texture set headers
 - [ ] 2f. remaining tables: 0x54, 0x78, 0x88, 0xA4, 0xC0, wing data, VM blocks, PMSH (v14)

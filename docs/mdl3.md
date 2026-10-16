@@ -32,7 +32,7 @@ Verified on all v8 and v14 files:
 | 0x48 | texture set offset | always points to a `TXS3` block |
 | 0x4C | shaders offset | always 0xFC, points to `SHDS` |
 | 0xD0 | packed mesh header (v14) | always points to `PMSH` in v14; 0 in v8 |
-| 0x6C | "vmInstanceOffset" | always the highest value; in 8 v8 files it is past the end of the file: it is probably a size, not an offset |
+| 0x6C | "vmInstanceOffset" (PDTools) | always the highest value; in 8 v8 files it is past the end of the file: it is probably a size, not an offset |
 
 Always 0 on disk in v8 and v14: 0x1C, 0x24, 0x70, 0x74, 0x80, 0x84, 0xA8, 0xAC, 0xD4, 0xD8.
 v8 only: 0xCA..0xE0 are all 0 (packed meshes and the car body stream exist only in later versions).
@@ -55,10 +55,55 @@ The record size of 8 is exact (gap == count * 8) on every file for: shapeKeys, b
 - **textureKeys** (0x8E, 0x90): sampler names (`diffuseMapSampler`, `reflectColorShiftMapSampler`, ...).
 - **bones** record is 0x48 bytes, not 8 (exact on all 2777 v8 / 2294 v14 files that have bones).
 
-## Records with sub-data (stride known, size of the trailing data not yet)
+## Models (header 0x10 count, 0x30 offset) — verified
 
-- **models** (0x10, 0x30): 0x30-byte records; start with a bounding sphere (x, y, z, radius floats), then a count and two offsets into data after the table.
-- **shapes** (0x14, 0x38): 0x30-byte records. This is the "mesh table" of the earlier research.
+0x30-byte records (`Mdl3Model.cs`). Checked on all car files (GT5 hq/race v8: 2176 files, 19,584 models;
+GT6 hq/race body v14: 2454 files, 26,994 models) with `gtdev mdl3-models`.
+
+| Off | Field |
+|---|---|
+| +00 | f32 bounding sphere radius |
+| +04 | f32 x3 bounding sphere center |
+| +10 | u16, always 0 |
+| +12 / +14 | bounds count (8 = box corners) / offset of float3 array |
+| +18 / +1C | command stream offset / size |
+| +20 / +24 / +28 | VM instruction pointers, -1 when unused (+20 and +28 always -1 in cars) |
+| +2C | u16, mostly 0xFFFF |
+| +2E | u16 flags |
+
+**Command stream** (`Mdl3Command.cs`, opcodes and operand sizes from PDTools): it is a small program that draws
+shapes. The decoder consumes **exactly** the declared size for every one of the 46,578 car models, every jump
+lands on a command boundary, every shape index is in range, and **every shape of every car is drawn by at least
+one model**. So the command stream is the complete model -> shape map.
+
+- `op59 <u8 shape> <u8>` draws one shape (by far the most common); `op60 <u16 shape> <u16>`, `op3`/`op4` the same with other operand sizes; `op74`/`op75` draw a list.
+- `op5 <u16 value> <u8 n> <n x u16 rel>` is a switch; `op9`/`op10` relative jumps (relative to the end of the operand).
+- In car 00010007 the switches choose between day/night shapes (`GT_DAYTIME` / `GT_NIGHT`), brake lights on, retractable headlights open/closed.
+- The command 8 reader in PDTools reads `flag & 0xF` twice (floats, then shorts); it looks like a bug, but the data agrees: all 45,522 op8 in GT6 decode exactly.
+
+Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; v14 adds `4 54 61`.
+
+## Shapes (header 0x14 count, 0x38 offset) — layout verified, data not yet
+
+0x30-byte records (`Mdl3Shape.cs`). This is the "mesh table" of the earlier research.
+
+| Off | Field | v8 (GT5) | v14 (GT6) |
+|---|---|---|---|
+| +00 | u16 flags | 36 values | 39 values |
+| +02 | i16 fvf index | | -1 on packed shapes |
+| +04 | i16 material index | | |
+| +06 | u16 | always 8 | always 0 |
+| +08 | u32 vertex count | non-zero in 24% | non-zero in 20% |
+| +0C | u32 vertex data offset | set when count is set | **always 0** |
+| +14 / +18 | u32 tri length / tri offset | | +18 always 0 |
+| +20 | u32 | 0000FFFF | 0 |
+| +24 | u16 | 0/1 | FF00 on packed shapes |
+| +26 | u16 triangle count | | |
+| +28 | u32 bbox offset (8 corners) | always set | always 0 |
+| +2C | u32 packed mesh reference offset | set in 84% | set exactly when vertex count is 0 |
+
+- In GT6 a shape is either plain (vertex count set, offsets 0: the data must be in `body_s`) or packed, never both.
+- In GT5 most body shapes are packed (all of them in car 00010007 hq).
 
 ## Still to explain
 

@@ -17,6 +17,10 @@ static class Mdl3Survey
         foreach (var root in args.Skip(1))
             Collect(root, entries);
 
+        // File list for the other commands, so they don't rescan the volumes.
+        File.WriteAllLines(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[0]))!, "files.tsv"),
+            entries.Select(e => $"{e.Path}\t{e.Group}\t{e.Head.U16(0x0C)}\t{e.Length}"));
+
         using var w = new StreamWriter(args[0]);
         void P(string s) => w.WriteLine(s);
         Console.WriteLine($"{entries.Count} MDL3 files -> {args[0]}");

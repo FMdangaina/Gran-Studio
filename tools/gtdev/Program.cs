@@ -5,13 +5,17 @@ if (args.Length == 0)
 {
     Console.WriteLine("gtdev <command> [args]");
     Console.WriteLine("Commands:");
-    Console.WriteLine("  mdl3-survey <out.txt> <root>...   header field/table check over every MDL3");
+    Console.WriteLine("  mdl3-survey <out.txt> <root>...   header field/table check over every MDL3 (also writes files.tsv)");
+    Console.WriteLine("  mdl3-records <files.tsv> <groupRegex> <table> <stride hex> <out.txt>   column stats of a table");
+    Console.WriteLine("  mdl3-models <files.tsv> <groupRegex> <out.txt> [dumpPath]   check model command streams / dump one file");
     return 1;
 }
 
 return args[0] switch
 {
     "mdl3-survey" => Mdl3Survey.Run(args[1..]),
+    "mdl3-records" => Mdl3Records.Run(args[1..]),
+    "mdl3-models" => Mdl3Models.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 
