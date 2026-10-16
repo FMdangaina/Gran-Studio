@@ -7,6 +7,7 @@ public sealed class Mdl3File
     public Mdl3Header Header { get; }
     public List<Mdl3Model> Models { get; } = [];
     public List<Mdl3Shape> Shapes { get; } = [];
+    public List<Mdl3Fvf> Fvfs { get; } = [];
     public Dictionary<int, string> ModelNames { get; } = [];
     public Dictionary<int, List<string>> ShapeNames { get; } = [];
 
@@ -19,6 +20,8 @@ public sealed class Mdl3File
         int modelsAt = (int)Data.U32(0x30), shapesAt = (int)Data.U32(0x38);
         for (int i = 0; i < modelCount; i++) Models.Add(Mdl3Model.Read(Data, modelsAt + i * Mdl3Model.Size));
         for (int i = 0; i < shapeCount; i++) Shapes.Add(Mdl3Shape.Read(Data, shapesAt + i * Mdl3Shape.Size));
+        int fvfCount = Data.U16(0x18), fvfAt = (int)Data.U32(0x40);
+        for (int i = 0; i < fvfCount; i++) Fvfs.Add(Mdl3Fvf.Read(Data, fvfAt + i * Mdl3Fvf.Size));
 
         foreach (var (name, index) in Keys(0x12, 0x34)) ModelNames[index] = name;
         foreach (var (name, index) in Keys(0x16, 0x3C))

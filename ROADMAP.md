@@ -16,8 +16,9 @@ Done when every table offset/count is explained and checked on all files
 - [x] 2b. Fixed blocks verified (materials 0xE4, SHDS 0xFC, TXS3, PMSH in v14) and key tables (name -> index)
 - [x] 2c. models and shapes records; model command streams decode exactly on all 4630 car files, every shape is drawn by a model
   (open: meaning of the switch values, shape flags; vertex/packed data is item 4)
-- [ ] 2d. fvf (vertex format) records
-- [ ] 2e. materials / shaders / texture set headers
+- [x] 2d. fvf (vertex format) records: layout exact on all files, positions inside the bbox on all 57,043 GT5 plain shapes,
+  CMP normals verified, morph arrays (hi/low blend, moving wings) understood. Open: UV scale -> 2e
+- [ ] 2e. materials / shaders / texture set headers (and the UV scale/offset they hold)
 - [ ] 2f. remaining tables: 0x54, 0x78, 0x88, 0xA4, 0xC0, wing data, VM blocks, PMSH (v14)
 
 ## Next

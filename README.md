@@ -17,6 +17,11 @@ It reads files from an already extracted game volume; it ships no game data.
 
 .NET 9 SDK, `dotnet build GTViewer.sln`.
 
+## Credits
+
+Thanks to **Nenkai** for PDTools and GTToolsSharp (MIT): his research on the PS3 Gran Turismo formats is the
+starting point of this work. Thanks to **flatz** for gttool. Details in `THIRD-PARTY-NOTICES.md`.
+
 ## License
 
 GPL-3.0, see `LICENSE`. Third-party references in `THIRD-PARTY-NOTICES.md`.

@@ -105,6 +105,49 @@ Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; 
 - In GT6 a shape is either plain (vertex count set, offsets 0: the data must be in `body_s`) or packed, never both.
 - In GT5 most body shapes are packed (all of them in car 00010007 hq).
 
+## Vertex formats (FVF, header 0x18 count, 0x40 offset) — verified
+
+`Mdl3Fvf.cs`, checked with `gtdev mdl3-fvf` on all car files (GT5: 95,709 formats, GT6: 23,922).
+
+Record 0x78 bytes: +00 name offset (`Flex`, `SimpleFill`, ...), +04 u32, +08 element list offset, +18 u8 element count,
++19 u8 vertex size, +74 array definition offset. Element 8 bytes: u32 name offset, u8 start, u8 component count,
+u8 RSX type, u8 array index.
+
+RSX types (`CELL_GCM_VERTEX_*`): 1 S1 normalized short, 2 F float, 3 SF half, 4 UB normalized byte, 5 S32K short,
+6 CMP 11/11/10-bit vector in a u32, 7 UB256 byte.
+
+Checks, all files: no element runs past its vertex, no two elements overlap, and in every array of every format
+the element sizes add up to the vertex size **exactly** (no unused bytes). So the vertex layout is fully known.
+
+| Attribute | Types seen | Status |
+|---|---|---|
+| `position` | always F x3 | **verified**: for all 57,043 GT5 plain shapes every vertex is inside the shape bbox (26,141 bboxes are exact min/max) |
+| `normal` | CMP | **verified**: x = bits 0-10, y = 11-21, z = 22-31, signed, /1023, /1023, /511 -> 99.9% of 3.26 M normals have length 1 +-0.01 (the other bit order: 5.6%) |
+| `tangent` | S1 x4, UB x4 | layout only |
+| `map1`, `map12` (two UV sets), `map34` | F, S1, UB x2/x4 | **open**: S1 stays in -1..1, F goes up to +-500: probably scaled by material/shader constants (item 2e) |
+| `colorSet1`, `colorSet2` | UB x4, SF x4 | layout only |
+| `blendIndices`, `blendWeight` | F x4 | GT6 only (skinning) |
+
+**Extra arrays (morphs).** Elements with array index 1 and 2 (`position` + `position_2`, `normal` + `normal_2`, ...)
+are two full copies of the vertices. Address of vertex v: `vertices + arrayDataOffset + arrayElementSize * index + v * arrayVertexSize`
+(array definition, 0x10 bytes: u32 data offset, u32 length (2), u32 element size = vertex count * vertex size, u8 vertex size, u8 0x10).
+Used by `hi_low_brend_model` (hi/low LOD blend) and by moving aero: Enzo rear wing, Quattro wing, front wings, spoilers.
+
+Plain vertex buffers: `shape.VerticesOffset` is absolute in the file; vertex v at `VerticesOffset + v * vertexSize`.
+In GT6 no car body shape has a plain buffer in the MDL3 (offset 0): the data is in `body_s`.
+
+## Notes on PDTools (Nenkai)
+
+What our checks agree with: header names, model/shape layout, command opcodes, FVF and array layout.
+Differences and open points we found:
+- The command 8 reader looks wrong (reads `flag & 0xF` twice) but it is right: all 45,522 op8 in GT6 decode exactly.
+- Header 0x6C is read as an offset; in 8 GT5 files it is past the end of the file, so it is likely a size.
+- Shape triangles: only triangle lists are read, strips return null ("Tristrip - FIX ME").
+- Packed meshes are read only for version >= 9 (GT6 `PMSH`). The GT5 packed reference (shape +0x2C, v8),
+  used by most GT5 car body shapes, is not handled.
+- `ReadPackedElement` starts reading at `PackedFlexVertCount` (a count used as an offset): to check against the data.
+- UVs: the source says itself that the scale is not understood.
+
 ## Still to explain
 
 Tables 0x54, 0x78, 0x88 (starts with a `Flex` name record), 0xA4, 0xC0 (v8), wing data (0x9C), fvf records (0x40), materials (0xE4),
