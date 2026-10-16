@@ -1,0 +1,42 @@
+# Build output
+bin/
+obj/
+*.pdb
+
+# Visual Studio / editor state
+.vs/
+*.suo
+*.user
+*.userprefs
+*~
+
+# Game data and anything derived from it: never commit Gran Turismo content
+# (MDL3, TXS3, VOL, exports, decoded textures, dumps).
+*.vol
+*.VOL
+*.mdl
+*.mdl3
+*.txs
+*.img
+*.bin
+*.dds
+*.png
+*.jpg
+*.bmp
+*.tga
+*.obj
+*.mtl
+*.fbx
+*.gltf
+*.glb
+*.zip
+*.csv
+*.log
+
+# Research and test material, local only
+Geom_research/
+tests/
+scratch/
+
+# App images and icons are part of the source
+!/src/GTViewer/Resources/*.png
