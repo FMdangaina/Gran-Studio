@@ -10,7 +10,14 @@ Tests and dumps: `tests\<topic>` (not committed).
 Read the header and top-level tables of every MDL3 in GT5 (`car\hq`, `car\race`,
 `car\interior`, `wheel`) and GT6 (`car\...\body`, `wheel`, `interior`).
 Done when every table offset/count is explained and checked on all files
-(no file left with unknown bytes in the header).
+(no file left with unknown bytes in the header). Findings in `docs/mdl3.md`.
+
+- [x] 2a. `gtdev mdl3-survey`: 24,922 MDL3 found, versions per folder, header ranges (cars: GT5 v8, GT6 v14)
+- [x] 2b. Fixed blocks verified (materials 0xE4, SHDS 0xFC, TXS3, PMSH in v14) and key tables (name -> index)
+- [ ] 2c. models and shapes records (0x30 + sub-data)
+- [ ] 2d. fvf (vertex format) records
+- [ ] 2e. materials / shaders / texture set headers
+- [ ] 2f. remaining tables: 0x54, 0x78, 0x88, 0xA4, 0xC0, wing data, VM blocks, PMSH (v14)
 
 ## Next
 
