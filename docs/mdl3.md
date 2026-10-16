@@ -102,6 +102,8 @@ Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; 
 | +28 | u32 bbox offset (8 corners) | always set | always 0 |
 | +2C | u32 packed mesh reference offset | set in 84% | set exactly when vertex count is 0 |
 
+- Triangles of plain GT5 shapes (first look, 3 cars with `gtdev mdl3-obj`, all shapes): u16 indices at +18 (absolute),
+  **+14 is the index count = 3 x triangle count**, plain triangle lists, no strips and no 0xFFFF restarts. To check on all files in item 4.
 - In GT6 a shape is either plain (vertex count set, offsets 0: the data must be in `body_s`) or packed, never both.
 - In GT5 most body shapes are packed (all of them in car 00010007 hq).
 
