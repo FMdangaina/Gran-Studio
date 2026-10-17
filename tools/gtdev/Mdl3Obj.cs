@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
+using GTFormats;
 using GTFormats.Mdl3;
+using GTFormats.Txs3;
 
 /// <summary>
 /// mdl3-obj &lt;file&gt; &lt;out.obj&gt;: export the plain shapes (vertex buffer inside the MDL3) as an OBJ, one group per shape.
@@ -21,7 +23,10 @@ static class Mdl3Obj
         var obj = new StringBuilder();
         var log = new StringBuilder();
         var ci = CultureInfo.InvariantCulture;
-        int vBase = 1, exported = 0, skipped = 0;
+        int vBase = 1, vtBase = 1, vnBase = 1, exported = 0, skipped = 0;
+        string mtlName = Path.GetFileNameWithoutExtension(args[1]) + ".mtl";
+        obj.AppendLine($"mtllib {mtlName}");
+        var usedMaterials = new SortedSet<int>();
 
         for (int s = 0; s < m.Shapes.Count; s++)
         {
@@ -29,6 +34,7 @@ static class Mdl3Obj
             string name = m.ShapeNames.TryGetValue(s, out var n) ? n[0] : $"shape{s}";
             if (sh.VerticesOffset == 0 || sh.TriOffset == 0 || sh.FvfIndex < 0)
             {
+                log.AppendLine($"{s,4} v={sh.VertexCount,6} triCount={sh.TriCount,6} flags={sh.Flags:X4} SKIPPED packed={sh.PackedRefOffset:X}  {name}");
                 skipped++;
                 continue;
             }
@@ -48,24 +54,70 @@ static class Mdl3Obj
             }
             var tris = Triangles(idx, sh.TriCount, out string mode);
             log.AppendLine($"{s,4} v={sh.VertexCount,6} triLen={sh.TriLength,6} triCount={sh.TriCount,6} flags={sh.Flags:X4} " +
-                           $"maxIdx={max,6} restarts={restarts,4} mode={mode,-6} tris={tris.Count,6} first={string.Join(',', idx.Take(12))}  {name}");
+                           $"maxIdx={max,6} restarts={restarts,4} mode={mode,-6} tris={tris.Count,6} first={string.Join(',', idx.Take(12))}  {name}" +
+                           $"  fvf {sh.FvfIndex} '{fvf.Name}' size {fvf.VertexSize}: " +
+                           string.Join(' ', fvf.Elements.Select(e => $"{e.Name}@{e.Start}:{e.Type}x{e.Count}" + (e.ArrayIndex > 0 ? $"[a{e.ArrayIndex}]" : ""))));
+
+            // Non-float positions (S1 in the wheel 'Shadow' format): scale not known yet (about bbox x2), logged and skipped.
+            if (pos.Type != RsxVertexType.F)
+            {
+                if (sh.BBoxOffset != 0)
+                {
+                var c = Enumerable.Range(0, 8).Select(k => Enumerable.Range(0, 3).Select(a => r.F32((int)sh.BBoxOffset + k * 12 + a * 4)).ToArray()).ToList();
+                var lo = Enumerable.Range(0, 3).Select(a => Enumerable.Range(0, (int)sh.VertexCount).Min(v => Comp(r, pos, (int)(sh.VerticesOffset + fvf.ElementOffset(pos, v)), a)));
+                var hi = Enumerable.Range(0, 3).Select(a => Enumerable.Range(0, (int)sh.VertexCount).Max(v => Comp(r, pos, (int)(sh.VerticesOffset + fvf.ElementOffset(pos, v)), a)));
+                log.AppendLine(string.Create(ci, $"     {pos.Type} position min {string.Join(' ', lo)} max {string.Join(' ', hi)}; bbox min " +
+                    $"{string.Join(' ', Enumerable.Range(0, 3).Select(a => c.Min(p => p[a])))} max {string.Join(' ', Enumerable.Range(0, 3).Select(a => c.Max(p => p[a])))}"));
+                }
+                skipped++;
+                continue;
+            }
 
             obj.AppendLine($"g s{s:D4}_{Short(name)}");
+            if (sh.MaterialIndex >= 0) { obj.AppendLine($"usemtl m{sh.MaterialIndex:D3}"); usedMaterials.Add(sh.MaterialIndex); }
+            var nrm = fvf["normal"];
+            var uv = fvf["map1"] ?? fvf["map12"];
+            if (nrm != null && nrm.Type != RsxVertexType.CMP) nrm = null;
             for (int v = 0; v < sh.VertexCount; v++)
             {
                 int at = (int)(sh.VerticesOffset + fvf.ElementOffset(pos, v));
                 obj.AppendLine(string.Create(ci, $"v {r.F32(at)} {r.F32(at + 4)} {r.F32(at + 8)}"));
             }
+            // UV decoded as in docs/mdl3.md (S1/32767, UB/255, F as is, no scale); V flipped for the OBJ bottom-left origin.
+            if (uv != null)
+                for (int v = 0; v < sh.VertexCount; v++)
+                {
+                    int at = (int)(sh.VerticesOffset + fvf.ElementOffset(uv, v));
+                    obj.AppendLine(string.Create(ci, $"vt {Comp(r, uv, at, 0)} {1 - Comp(r, uv, at, 1)}"));
+                }
+            // CMP normal: x bits 0-10, y 11-21, z 22-31, signed, /1023 /1023 /511 (verified in 2d).
+            if (nrm != null)
+                for (int v = 0; v < sh.VertexCount; v++)
+                {
+                    uint p = r.U32((int)(sh.VerticesOffset + fvf.ElementOffset(nrm, v)));
+                    float x = ((int)(p << 21) >> 21) / 1023f, y = ((int)(p << 10) >> 21) / 1023f, z = ((int)p >> 22) / 511f;
+                    obj.AppendLine(string.Create(ci, $"vn {x} {y} {z}"));
+                }
             foreach (var (a, b, c) in tris)
                 if (a < sh.VertexCount && b < sh.VertexCount && c < sh.VertexCount)
-                    obj.AppendLine($"f {a + vBase} {b + vBase} {c + vBase}");
+                    obj.AppendLine($"f {Corner(a)} {Corner(b)} {Corner(c)}");
+            string Corner(int i) => (uv, nrm) switch
+            {
+                (not null, not null) => $"{i + vBase}/{i + vtBase}/{i + vnBase}",
+                (not null, null) => $"{i + vBase}/{i + vtBase}",
+                (null, not null) => $"{i + vBase}//{i + vnBase}",
+                _ => $"{i + vBase}",
+            };
             vBase += (int)sh.VertexCount;
+            if (uv != null) vtBase += (int)sh.VertexCount;
+            if (nrm != null) vnBase += (int)sh.VertexCount;
             exported++;
         }
 
+        WriteMtl(m, usedMaterials, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, mtlName));
         File.WriteAllText(args[1], obj.ToString());
         File.WriteAllText(Path.ChangeExtension(args[1], ".txt"), log.ToString());
-        Console.WriteLine($"{exported} shapes exported, {skipped} skipped (packed or no data) -> {args[1]}");
+        Console.WriteLine($"{exported} shapes exported, {skipped} skipped (packed, no data or non-float positions) -> {args[1]}");
         return 0;
     }
 
@@ -78,7 +130,8 @@ static class Mdl3Obj
         {
             var c = line.Split('\t');
             if (!re.IsMatch(c[1])) continue;
-            var m = Mdl3File.Load(c[0]);
+            Mdl3File m;
+            try { m = Mdl3File.Load(c[0]); } catch { continue; }   // old v1/v2 files
             long plain = 0; int ps = 0, pk = 0;
             foreach (var sh in m.Shapes)
             {
@@ -114,6 +167,53 @@ static class Mdl3Obj
             tris.Add((run & 1) == 1 ? (a, b, c) : (b, a, c));
         }
         return tris;
+    }
+
+    static float Comp(BigEndianReader r, Mdl3FvfElement e, int at, int c) => e.Type switch
+    {
+        RsxVertexType.F => r.F32(at + c * 4),
+        RsxVertexType.SF => (float)r.F16(at + c * 2),
+        RsxVertexType.S1 => r.S16(at + c * 2) / 32767f,
+        RsxVertexType.S32K => r.S16(at + c * 2),
+        RsxVertexType.UB => r.U8(at + c) / 255f,
+        RsxVertexType.UB256 => r.U8(at + c),
+        _ => 0,
+    };
+
+    /// <summary>One .mtl entry per used material; the diffuse (and alpha) maps found in the file are decoded to PNG next to it.</summary>
+    static void WriteMtl(Mdl3File m, IEnumerable<int> used, string path)
+    {
+        string dir = Path.GetDirectoryName(path)!, stem = Path.GetFileNameWithoutExtension(path);
+        var images = Txs3Image.ReadAll(m.Data, (int)m.Data.U32(0x48));
+        var written = new Dictionary<int, string?>();
+        string? Texture(Mdl3SamplerKey? key)
+        {
+            if (key == null || key.External || key.Index >= m.TextureInfos.Count) return null;
+            var t = m.TextureInfos[key.Index];
+            if (written.TryGetValue(t.ImageIndex, out var f)) return f;
+            var img = images[t.ImageIndex];
+            byte[]? rgba = img.Offset == 0 ? null : img.DecodeLevel0(m.Data.Data.AsSpan((int)img.Offset, (int)img.Size), t.Pitch);
+            f = null;
+            if (rgba != null)
+            {
+                f = $"{stem}_tex{t.ImageIndex:D3}.png";
+                Png.Write(Path.Combine(dir, f), rgba, img.Width, img.Height);   // level 0, first face/slice
+            }
+            return written[t.ImageIndex] = f;
+        }
+
+        var sb = new StringBuilder();
+        foreach (int i in used)
+        {
+            var mat = m.Materials[i];
+            sb.AppendLine($"newmtl m{i:D3}");
+            sb.AppendLine($"# {mat.Name} {(mat.DataIndex >= 0 && mat.DataIndex < m.MaterialData.Count ? m.MaterialData[mat.DataIndex].Name : "")}");
+            sb.AppendLine("Kd 0.8 0.8 0.8");
+            if (Texture(mat["diffuseMapSampler"]) is { } kd) sb.AppendLine($"map_Kd {kd}");
+            if (Texture(mat["alphaMapSampler"]) is { } d) sb.AppendLine($"map_d {d}");
+            sb.AppendLine();
+        }
+        File.WriteAllText(path, sb.ToString());
     }
 
     static string Short(string path)

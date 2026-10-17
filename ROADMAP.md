@@ -6,25 +6,24 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-### 3. TXS3 textures
-Decode the TXS3 images of every car file to pixels and check them visually.
-Done when every GT5 car/interior/wheel image decodes (size = format x width x height x mipmaps, no leftover bytes)
-and the GT6 pixels are located. Findings in `docs/txs3.md`.
-Reference: Nenkai's TXS3Converter (MIT, cloned in `ref\TXS3Converter`, uses PDTools' TextureSet3 and PS3 Swizzler).
+### 4. Geometry
+Decode every shape of every car file to triangles (positions, normals, UVs) and check them visually (OBJ export).
+Done when every GT5 and GT6 car/interior/wheel shape decodes (positions inside the shape bbox, indices in range,
+triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.md`.
 
-- [x] 3a. Formats (`gtdev txs3-survey`): only DXT1/DXT23/DXT45/A8R8G8B8 (swizzled or linear); image record fully mapped
-  (+08 cube, +0B location, +10 depth for 3D textures); remap 0xAA1B = A8R8G8B8 bytes B,G,R,A
-- [x] 3b. Size rule exact on all 23,224 car/interior/wheel/tire/carparts files: faces padded to 128, linear pitch on every
-  level, non-pow2 mipmapped linear allocated at pow2 pitch
-- [x] 3c. Decode (`Txs3Image`, `gtdev txs3-png`): every in-file image decodes, 0 failures; visual check OK on decals, calipers,
-  wheels, linear, cube. Open: 3D DXT block order (looks right, confirm in the viewer), +0B on 7 BRDF images
-- [ ] 3d. GT6: find where the image pixels are (image offsets 0 in `body`; `body_s` chunks, other files)
+- [x] 4a. Plain shapes to OBJ (`gtdev mdl3-obj`): positions, CMP normals, UVs (V flipped), `.mtl` with the diffuse/alpha
+  maps as PNG. GT5 wheel `wheel\hq\00010098.04` checked by the user: perfect. GT5 `car\hq\00010075`: everything but the body.
+  Open: wheel `Shadow` format has S1 positions (scale about bbox x2, not exact; not visible geometry)
+- [ ] 4b. GT5 packed vertices: shape packed ref (+2C, 0x40 bytes) + geometry block 0x94 -> positions/normals/UVs
+  (first test: the 3 `GTBE_BODY` shapes of `car\hq\00010075`)
+- [ ] 4c. GT5 packed indices (PS3 Edge compressed?)
+- [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices)
+- [ ] 4e. Check over every car file, 0 failures
 
 ## Next
 
-4. **Geometry** — unpacked meshes first, then packed vertices, then Edge-compressed indices.
-   Done only when it works on every car.
-5. **GT6 `body_s`** — understand the compressed companion of `body`, then GT6 vs GT5 differences.
+5. **GT6 `body_s`** — container known (3d: stream map, bundles, images); left: the shape data in the bundles,
+   the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
 6. **Viewer** — Direct3D 11 (Vortice.Windows), read only.
 
 ## Later / open questions
@@ -60,3 +59,16 @@ Reference: Nenkai's TXS3Converter (MIT, cloned in `ref\TXS3Converter`, uses PDTo
   Open (data located, meaning unknown): material block +04, 0x78 n, 0xB0 +28..+2E, a few u16 fields; 17 old v1/v2/v4 files not covered.
   For item 4: GT5 packed geometry (0x94 + shape packed refs, looks like PS3 Edge), GT6 PMSH data (exact sizes known).
   For item 5: stream map 0xDC lists the `body_s` deflate chunks.
+- **3. TXS3 textures** (2026-10-17) — every in-file image decodes, GT6 body pixels found in `body_s`; findings in `docs/txs3.md`.
+  Reference: Nenkai's TXS3Converter (MIT, cloned in `ref\TXS3Converter`, uses PDTools' TextureSet3 and PS3 Swizzler).
+
+- [x] 3a. Formats (`gtdev txs3-survey`): only DXT1/DXT23/DXT45/A8R8G8B8 (swizzled or linear); image record fully mapped
+  (+08 cube, +0B location, +10 depth for 3D textures); remap 0xAA1B = A8R8G8B8 bytes B,G,R,A
+- [x] 3b. Size rule exact on all 23,224 car/interior/wheel/tire/carparts files: faces padded to 128, linear pitch on every
+  level, non-pow2 mipmapped linear allocated at pow2 pitch
+- [x] 3c. Decode (`Txs3Image`, `gtdev txs3-png`): every in-file image decodes, 0 failures; visual check OK on decals, calipers,
+  wheels, linear, cube. Open: 3D DXT block order (looks right, confirm in the viewer), +0B on 7 BRDF images
+- [x] 3d. GT6 body pixels are in `body_s` (`Mdl3StreamMap`, `gtdev body-s`): the 0xDC stream map tiles `body_s` exactly,
+  each stream = deflate/raw chunks -> bundle (header with shape + image tables, then data); all 168,414 offset-0 images
+  found and decoded, 0 failures; extra copies in variant bundles are identical; `txs3-png` reads them. RX-8 checked visually.
+  Open for item 5: `/` sub streams = paint colours? (BRDF images), shape data in the bundles

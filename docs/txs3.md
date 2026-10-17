@@ -50,4 +50,16 @@ to confirm in the viewer. Images look upside down (decal text): v = 0 at the bot
 ## GT6 car bodies
 
 87,258 of 88,287 images in `car\hq\body` and 81,156 of 81,693 in `race\body` have offset 0: the pixels are not in
-`body` (sizes are known and follow the rule above). GT6 interior / wheel / tire / carparts images are all in the file. -> 3d.
+`body` (sizes are known and follow the rule above). GT6 interior / wheel / tire / carparts images are all in the file.
+
+**Where they are (3d): in `body_s`**, found through the stream map at `body` header 0xDC (layout in `docs/mdl3.md`,
+"Shape stream map"). Checked with `gtdev body-s` on all 2454 GT6 car bodies (`tests\txs3_body\check_all.txt`), 0 failures:
+- every one of the 87,258 + 81,156 offset-0 images is listed in at least one `body_s` bundle, with room for its full
+  record size, and decodes (DXT1/23/45, A8R8G8B8 swizzled and linear); no image that has pixels in `body` is in `body_s`.
+- pixel offsets are relative to the start of the inflated bundle, 0x80-aligned; small images sit in the bundle header part,
+  large ones in the data part (hq: 26,134 header / 66,717 data). Images, tables and the bundle header never overlap.
+- An image can be in several bundles (paint-colour sub streams of `/`, the variants of `custom_*` parts):
+  the 10,886 extra copies all have **the same pixels** as the first one, so each bundle is self-contained.
+- Visual check (tests\txs3_body\png_*): RX-8 (0001/0001 hq) body atlas, decals, shadow, caliper, disc: correct.
+
+`gtdev txs3-png <body> <outDir>` now takes the pixels from `body_s` (every copy, suffix `_vN` when there are several).

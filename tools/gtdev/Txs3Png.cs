@@ -70,32 +70,43 @@ static class Txs3Png
     {
         Directory.CreateDirectory(outDir);
         int i = 0, written = 0;
-        foreach (var (img, pitch, name) in Images(new BigEndianReader(File.ReadAllBytes(path)), out var r))
+        var data = new BigEndianReader(File.ReadAllBytes(path));
+        // GT6 car bodies: images with offset 0 are in body_s (every bundle holding one is exported, variants get a suffix).
+        var inBodyS = File.Exists(path + "_s") && Mdl3StreamMap.Read(data) is { } map
+            ? map.FindImages(File.ReadAllBytes(path + "_s")) : [];
+        foreach (var (img, pitch, name) in Images(data, out var r))
         {
             string shortName = Regex.Replace(Path.GetFileNameWithoutExtension(name.Replace('\\', '/').Split('/')[^1]), @"[^\w\-]", "_");
             string info = $"{i:D3} {Txs3Survey.FormatName(img.Format)} {img.Width}x{img.Height}{(img.Depth > 1 ? "x" + img.Depth : "")}{(img.Cube ? " cube" : "")} mips {img.Mipmaps} {name}";
             i++;
             if (only != null && !only.Split(',').Contains((i - 1).ToString())) continue;
-            if (img.Offset == 0) { Console.WriteLine(info + "  -> offset 0, skipped"); continue; }
-            var rgba = img.DecodeLevel0(r.Data.AsSpan((int)img.Offset, (int)img.Size), pitch);
-            if (rgba == null) { Console.WriteLine(info + "  -> format not decoded"); continue; }
-            int w = img.Width, h = img.Height * img.Faces * img.Depth;
-            string baseName = Path.Combine(outDir, $"{i - 1:D3}_{shortName}");
-            if (split)
+            var sources = new List<(byte[] bytes, int offset, string where)>();
+            if (img.Offset != 0) sources.Add((r.Data, (int)img.Offset, ""));
+            else if (inBodyS.TryGetValue(i - 1, out var l)) sources.AddRange(l.Select(x => (x.bundle, x.offset, x.where)));
+            if (sources.Count == 0) { Console.WriteLine(info + "  -> offset 0, not in body_s, skipped"); continue; }
+            for (int v = 0; v < sources.Count; v++)
             {
-                var rgb = (byte[])rgba.Clone();
-                var a = (byte[])rgba.Clone();
-                for (int p = 0; p < rgba.Length; p += 4)
+                var (bytes, offset, where) = sources[v];
+                var rgba = img.DecodeLevel0(bytes.AsSpan(offset, (int)img.Size), pitch);
+                if (rgba == null) { Console.WriteLine(info + "  -> format not decoded"); continue; }
+                int w = img.Width, h = img.Height * img.Faces * img.Depth;
+                string baseName = Path.Combine(outDir, $"{i - 1:D3}_{shortName}{(sources.Count > 1 ? "_v" + v : "")}");
+                if (split)
                 {
-                    rgb[p + 3] = 255;
-                    a[p] = a[p + 1] = a[p + 2] = rgba[p + 3]; a[p + 3] = 255;
+                    var rgb = (byte[])rgba.Clone();
+                    var a = (byte[])rgba.Clone();
+                    for (int p = 0; p < rgba.Length; p += 4)
+                    {
+                        rgb[p + 3] = 255;
+                        a[p] = a[p + 1] = a[p + 2] = rgba[p + 3]; a[p + 3] = 255;
+                    }
+                    Png.Write(baseName + "_rgb.png", Scale(rgb, w, h, scale), w * scale, h * scale);
+                    Png.Write(baseName + "_a.png", Scale(a, w, h, scale), w * scale, h * scale);
                 }
-                Png.Write(baseName + "_rgb.png", Scale(rgb, w, h, scale), w * scale, h * scale);
-                Png.Write(baseName + "_a.png", Scale(a, w, h, scale), w * scale, h * scale);
+                else Png.Write(baseName + ".png", Scale(rgba, w, h, scale), w * scale, h * scale);
+                written++;
+                Console.WriteLine(info + (where != "" ? $"  [body_s {where}]" : ""));
             }
-            else Png.Write(baseName + ".png", Scale(rgba, w, h, scale), w * scale, h * scale);
-            written++;
-            Console.WriteLine(info);
         }
         Console.WriteLine($"{written} PNG -> {outDir}");
         return 0;

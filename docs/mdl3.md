@@ -344,10 +344,26 @@ In GT6 **car bodies** the smooth data offsets are 0 (the data is in `body_s`); i
 
 ### Shape stream map (0xDC, v14): the link to body_s
 
-Header 0x20: u32 group count, u16, u16 2, u32 groups. Group 0x0C: u32 name (`/`, `custom_brake0`, `custom_caliper0`), u32 n,
-u32 items (0x18: a stream + u32 m + u32 sub streams (m x 0x10)). Stream 0x10: u32 0, u32, u16 c1, u16 c2, u32 chunk list
-((c1 + c2) x 8: u32 `0x80000000 | compressed size` (u16) + u32 body_s offset (0x80-aligned), or plain pairs).
-These chunks are the deflate blocks of `body_s`: item 5.
+Header 0x20: u32 group count, u16, u16 2, u32 groups. Group 0x0C: u32 name (`/`, `custom_brake0`, `custom_caliper0`,
+`custom_a0`..`custom_f0`), u32 n, u32 items (0x18: a stream + u32 m + u32 sub streams (m x 0x10)).
+Stream 0x10: u32 0, u32 **offset in body_s**, u16 c1 header chunks, u16 c2 data chunks, u32 chunk list
+((c1 + c2) x 8: u32 stored size, bit 31 = raw deflate (size < 64 KB), else stored as is; u32 inflated size).
+`GTFormats/Mdl3/Mdl3StreamMap.cs`, checked with `gtdev body-s` on all 2454 GT6 car bodies (0 failures, `tests\txs3_body`):
+
+- The streams **tile `body_s` exactly**: sorted by offset, each starts where the previous ends, the last ends at the file end.
+  The chunks of a stream are contiguous from its offset, header chunks first; every chunk inflates to exactly its size.
+- The chunks of one stream, inflated and concatenated, form a **bundle**. Bundle header (big-endian): +00 0, +04 header size
+  (= sum of the header chunks), +08 bundle size, +0C data size, +10 0, +14 u16 shape count, +16 u16 image count,
+  +18 shape table (0x20 records, u32 shape index first), +1C image table (0x10 records: u32 TXS3 image index,
+  u32 pixel offset in the bundle, 8 zero). The map pads the size of a deflated last data chunk to 0x80
+  (5 race bundles; the bundle header has the exact size).
+- Empty bundles (0x80 header only) are common (`/` sub streams without own data, empty `custom_*` items).
+- `/` has one item = the car; its sub streams hold almost only `ReflectColorShiftBRDF` / `ScatterColorShiftBRDF` images:
+  most likely one per paint colour (to confirm with the colour list). `custom_*` items are the alternative parts
+  (brakes, calipers, mufflers ...), each with its shapes and images.
+- Shape data (unclaimed non-zero bytes) is in the header part, and in the data part of 30 bundles that have shapes:
+  decoding it is item 4/5. Images: see `docs/txs3.md`.
+- PDTools reads a different streaming table (header 0xAC, 0 in every GT6 car file) and does not read images from `body_s`.
 
 ## Notes on PDTools (Nenkai)
 

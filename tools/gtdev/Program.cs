@@ -9,11 +9,12 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-records <files.tsv> <groupRegex> <table> <stride hex> <out.txt>   column stats of a table");
     Console.WriteLine("  mdl3-models <files.tsv> <groupRegex> <out.txt> [dumpPath]   check model command streams / dump one file");
     Console.WriteLine("  mdl3-fvf <files.tsv> <groupRegex> <out.txt>   check vertex formats, decode plain positions vs bbox");
-    Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ (research view) + index stats in <out>.txt");
+    Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ + MTL + PNG textures, shape stats in <out>.txt");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
     Console.WriteLine("  txs3-survey <files.tsv> <groupRegex> <out.txt>   TXS3 image formats, mipmaps, computed vs record size");
     Console.WriteLine("  txs3-png <file> <outDir> | <files.tsv> <groupRegex> <out.txt>   decode TXS3 images to PNG / decode check");
+    Console.WriteLine("  body-s <files.tsv> <groupRegex> <out.txt> | <body> <out.txt>   GT6 body_s map: streams, bundles, image pixels");
     return 1;
 }
 
@@ -30,6 +31,7 @@ return args[0] switch
     "mdl3-coverage" => Mdl3Coverage.Run(args[1..]),
     "txs3-survey" => Txs3Survey.Run(args[1..]),
     "txs3-png" => Txs3Png.Run(args[1..]),
+    "body-s" => BodySCheck.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 
