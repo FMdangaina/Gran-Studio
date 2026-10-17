@@ -8,6 +8,9 @@ public sealed class Mdl3File
     public List<Mdl3Model> Models { get; } = [];
     public List<Mdl3Shape> Shapes { get; } = [];
     public List<Mdl3Fvf> Fvfs { get; } = [];
+    public List<Mdl3Material> Materials { get; } = [];
+    public List<Mdl3MaterialData> MaterialData { get; } = [];
+    public List<Mdl3TextureInfo> TextureInfos { get; } = [];
     public Dictionary<int, string> ModelNames { get; } = [];
     public Dictionary<int, List<string>> ShapeNames { get; } = [];
 
@@ -22,6 +25,12 @@ public sealed class Mdl3File
         for (int i = 0; i < shapeCount; i++) Shapes.Add(Mdl3Shape.Read(Data, shapesAt + i * Mdl3Shape.Size));
         int fvfCount = Data.U16(0x18), fvfAt = (int)Data.U32(0x40);
         for (int i = 0; i < fvfCount; i++) Fvfs.Add(Mdl3Fvf.Read(Data, fvfAt + i * Mdl3Fvf.Size));
+
+        // Material block at 0xE4: u16 materials, u16 data, u8 ?, u8 state blocks, u16 texture infos, 4 offsets.
+        const int mat = 0xE4;
+        for (int i = 0; i < Data.U16(mat); i++) Materials.Add(Mdl3Material.Read(Data, (int)Data.U32(mat + 8) + i * Mdl3Material.Size));
+        for (int i = 0; i < Data.U16(mat + 2); i++) MaterialData.Add(Mdl3MaterialData.Read(Data, (int)Data.U32(mat + 0x0C) + i * Mdl3MaterialData.Size));
+        for (int i = 0; i < Data.U16(mat + 6); i++) TextureInfos.Add(Mdl3TextureInfo.Read(Data, (int)Data.U32(mat + 0x14) + i * Mdl3TextureInfo.Size));
 
         foreach (var (name, index) in Keys(0x12, 0x34)) ModelNames[index] = name;
         foreach (var (name, index) in Keys(0x16, 0x3C))
