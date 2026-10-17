@@ -12,9 +12,12 @@ Done when every GT5 car/interior/wheel image decodes (size = format x width x he
 and the GT6 pixels are located. Findings in `docs/txs3.md`.
 Reference: Nenkai's TXS3Converter (MIT, cloned in `ref\TXS3Converter`, uses PDTools' TextureSet3 and PS3 Swizzler).
 
-- [ ] 3a. Formats: list every FORMAT value (bits 8-15) and its linear/swizzle flag over all images, compare with PDTools' CellTextureEnums
-- [ ] 3b. Size check: computed size (DXT1/3/5, A8R8G8B8, ... with mipmaps) == image record size on every GT5 image
-- [ ] 3c. Decode to PNG (`gtdev txs3-png`), visual check on the test car (hq\00010075) and a few others
+- [x] 3a. Formats (`gtdev txs3-survey`): only DXT1/DXT23/DXT45/A8R8G8B8 (swizzled or linear); image record fully mapped
+  (+08 cube, +0B location, +10 depth for 3D textures); remap 0xAA1B = A8R8G8B8 bytes B,G,R,A
+- [x] 3b. Size rule exact on all 23,224 car/interior/wheel/tire/carparts files: faces padded to 128, linear pitch on every
+  level, non-pow2 mipmapped linear allocated at pow2 pitch
+- [x] 3c. Decode (`Txs3Image`, `gtdev txs3-png`): every in-file image decodes, 0 failures; visual check OK on decals, calipers,
+  wheels, linear, cube. Open: 3D DXT block order (looks right, confirm in the viewer), +0B on 7 BRDF images
 - [ ] 3d. GT6: find where the image pixels are (image offsets 0 in `body`; `body_s` chunks, other files)
 
 ## Next

@@ -84,6 +84,8 @@ public sealed class Mdl3TextureInfo
     public int Mipmaps;             // FORMAT register bits 16-23
     public int WrapS, WrapT;        // ADDRESS register bits 0-3 / 8-11: 1 wrap, 2 mirror, 3 clamp to edge, 4 border...
     public int Width, Height;       // IMAGE_RECT
+    public uint Remap;              // +14 CONTROL1: 0xAAE4 identity (DXT), 0xAA1B reversed (A8R8G8B8, bytes B,G,R,A)
+    public int Pitch;               // +28 CONTROL3 bits 0-19 (row bytes of linear images; depth in bits 20-31)
     public int ImageIndex;          // +3A: TXS3 buffer index
 
     public static Mdl3TextureInfo Read(BigEndianReader r, int at)
@@ -98,6 +100,8 @@ public sealed class Mdl3TextureInfo
             WrapT = (int)((address >> 8) & 0xF),
             Width = r.U16(at + 0x1C),
             Height = r.U16(at + 0x1E),
+            Remap = r.U32(at + 0x14),
+            Pitch = (int)(r.U32(at + 0x28) & 0xFFFFF),
             ImageIndex = r.U16(at + 0x3A),
         };
     }

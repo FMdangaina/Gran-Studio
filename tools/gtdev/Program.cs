@@ -12,6 +12,8 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ (research view) + index stats in <out>.txt");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
+    Console.WriteLine("  txs3-survey <files.tsv> <groupRegex> <out.txt>   TXS3 image formats, mipmaps, computed vs record size");
+    Console.WriteLine("  txs3-png <file> <outDir> | <files.tsv> <groupRegex> <out.txt>   decode TXS3 images to PNG / decode check");
     return 1;
 }
 
@@ -26,6 +28,8 @@ return args[0] switch
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),
     "mdl3-matcheck" => Mdl3MatLayout.Run(args[1..]),
     "mdl3-coverage" => Mdl3Coverage.Run(args[1..]),
+    "txs3-survey" => Txs3Survey.Run(args[1..]),
+    "txs3-png" => Txs3Png.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 
