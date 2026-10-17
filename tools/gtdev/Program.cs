@@ -11,6 +11,7 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-fvf <files.tsv> <groupRegex> <out.txt>   check vertex formats, decode plain positions vs bbox");
     Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ (research view) + index stats in <out>.txt");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
+    Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
     return 1;
 }
 
@@ -24,6 +25,7 @@ return args[0] switch
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),
     "mdl3-matcheck" => Mdl3MatLayout.Run(args[1..]),
+    "mdl3-coverage" => Mdl3Coverage.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 

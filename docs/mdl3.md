@@ -37,7 +37,7 @@ Verified on all v8 and v14 files:
 Always 0 on disk in v8 and v14: 0x1C, 0x24, 0x70, 0x74, 0x80, 0x84, 0xA8, 0xAC, 0xD4, 0xD8.
 v8 only: 0xCA..0xE0 are all 0 (packed meshes and the car body stream exist only in later versions).
 v14 only: 0xC0/0xC4/0xC6 are all 0 and 0xC8 is always 0xFFFF.
-0xB4 holds the same values as `modelsOffset` (0x30) in v8; to check if it is a copy.
+0xB4 == `modelsOffset` (0x30) in every v8 and v14 car file (it goes with the 0xB0 table, one record per model).
 
 Layout order (most common, v8): materials < shaders < 0x78 < models < modelKeys < shapes < shapeKeys < fvf < textureSet < 0x54 < VM bytecode < 0x88 < textureKeys < 0xB0 < 0xB8 < 0xBC, then 0x6C last.
 v14 is the same with `PMSH` (0xD0) before the models and the packed mesh keys (0xCC) at the end.
@@ -46,7 +46,7 @@ v14 is the same with `PMSH` (0xD0) before the models and the packed mesh keys (0
 
 Record: `u32 nameOffset, u32 index`, 8 bytes, sorted by name. Names are null-terminated ASCII in a string pool near the end of the file.
 The record size of 8 is exact (gap == count * 8) on every file for: shapeKeys, bones*, registerVals*, 0x5C*, wingKeys, and textureKeys in most files.
-(*) same 8-byte stride; name/index meaning still to be checked.
+(*) same 8-byte stride; registerVals (0x58) and 0x5C are the VM host registers and outputs (see 2f below), bones are 0x48.
 
 - **modelKeys** (0x12 count, 0x34 offset): model names, e.g. `GTBE_BODY`, `GTBE_INTERIOR_SHARE`, `GTBE_SHADOW_BOX`, `GTBE_SS_BODY`.
 - **shapeKeys** (0x16, 0x3C): the Maya node path of each shape, e.g.
@@ -65,7 +65,8 @@ GT6 hq/race body v14: 2454 files, 26,994 models) with `gtdev mdl3-models`.
 | +00 | f32 bounding sphere radius |
 | +04 | f32 x3 bounding sphere center |
 | +10 | u16, always 0 |
-| +12 / +14 | bounds count (8 = box corners) / offset of float3 array |
+| +12 | u8 flags |
+| +13 / +14 | u8 bounds point count (8 = box corners) / offset of float3 array (PDTools reads +12 as a u16 count: 0x0408 = flag 4, 8 points) |
 | +18 / +1C | command stream offset / size |
 | +20 / +24 / +28 | VM instruction pointers, -1 when unused (+20 and +28 always -1 in cars) |
 | +2C | u16, mostly 0xFFFF |
@@ -111,8 +112,9 @@ Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; 
 
 `Mdl3Fvf.cs`, checked with `gtdev mdl3-fvf` on all car files (GT5: 95,709 formats, GT6: 23,922).
 
-Record 0x78 bytes: +00 name offset (`Flex`, `SimpleFill`, ...), +04 u32, +08 element list offset, +18 u8 element count,
-+19 u8 vertex size, +74 array definition offset. Element 8 bytes: u32 name offset, u8 start, u8 component count,
+Record 0x78 bytes: +00 name offset (`Flex`, `SimpleFill`, ...), +04 u32, +08 element list offset,
++14 offset of 0x10 bytes (GT5 only, 64% of the formats): one RSX vertex attribute slot per element, zero after the element count,
++18 u8 element count, +19 u8 vertex size, +74 array definition offset. Element 8 bytes: u32 name offset, u8 start, u8 component count,
 u8 RSX type, u8 array index.
 
 RSX types (`CELL_GCM_VERTEX_*`): 1 S1 normalized short, 2 F float, 3 SF half, 4 UB normalized byte, 5 S32K short,
@@ -151,7 +153,7 @@ u16 texture info count, then offsets of the four tables. The tables are contiguo
 | Record | Size | Fields |
 |---|---|---|
 | material | 0x34 | +00 name (may be 0), +04 i16 material data index, +06 i16 render state index (always < state count), +08 u16 flags (GT5 1/3, GT6 1/3/9/B), +0A u16 sampler key count, +0C sampler keys offset. **+10..+33 always 0** (runtime space) |
-| material data | 0x28 | +00 shader family name (`Flex`, `SimpleFill`...), +04 index, +08 u16 0x0102 (GT6 also 0x0002), +0A constant count, +0C vec4 values, +10 constant keys (name -> vec4 slot; max slot + 1 == count in every record), +14 shader reference, +18/+22 list of short arrays (count >= 1), +1C, +20, +24 a 0x20 record |
+| material data | 0x28 | +00 shader family name (`Flex`, `SimpleFill`...), +04 index, +08 u16 0x0102 (GT6 also 0x0002), +0A constant count, +0C vec4 values, +10 constant keys (name -> vec4 slot; max slot + 1 == count in every record), +14 shader reference, +18 list (count u16 +22) of (u32 n, u32 offset of n u16), +1C u16 pairs (count u16 +20; offset 0 iff count 0), +24 == +0C of its shader reference (= its pass list) |
 | shader reference | 0x28 | +00 same name as the material data, +04 SHDS definition index (always in range) |
 | render state | 0xA0 | RSX command buffer, see below |
 | texture info | 0x44 | RSX command buffer + image index + name, see below |
@@ -173,17 +175,18 @@ u16 texture info count, then offsets of the four tables. The tables are contiguo
   On every file: width/height, format (FORMAT bits 8-15) and mipmap count (bits 16-23) equal the TXS3 image record.
 
 **SHDS (0xFC)**: +08 = 0xFC (own offset, reloc base), +16 u16 definition count, +18 u16 vertex program count,
-+1A u16 count of a second program table (its index is in the definitions), +1C definitions (0x0C: name, u32 id,
-i16 vertex program, i16 second-table index, both always in range), +20 vertex programs (0x28: microcode offset, size
-(multiple of 16 = RSX VP instructions), +0A input count, +0C constant count, +14 inputs (0x10 each, named), +18 constants
-(0x10 each, named, register numbers near 467 = top of the RSX constant file)), +28 = MDL3 header 0x6C.
++1A u16 fragment program count (the "second program table"; its index is in the definitions), +1C definitions (0x0C: name, u32 id,
+i16 vertex program, i16 fragment program, both always in range), +20 vertex programs (0x28: microcode offset, size
+(multiple of 16 = RSX VP instructions), +08 u16 count of a +10 table (0x10, named), +0A input count, +0C constant count,
++14 inputs (0x10 each, named), +18 constants (0x10 each, named, register numbers near 467 = top of the RSX constant file)),
++28 = MDL3 header 0x6C, +2C fragment programs, +30..+40 three more tables (see 2f below).
 GT6: definition count == material data count (2449 of 2454 files); GT5: more definitions than material data.
 
 **TXS3 header in MDL3** (0x40): +08 = own offset (reloc base), +10 0 (GT5) / 1 (GT6), +14 texture info count **0**
 (the infos are in the material block), +16 image count, +1C image records right after the header (0x20 each:
 offset, size, format, mipmaps, width, height), +20 = MDL3 header 0x6C.
 - GT5: image offsets are absolute in the MDL3; most images start at header 0x6C, big ones sit right after the
-  image record list. There is more data after the last image (to explain in item 3).
+  image record list. The data after the last image is the **fragment program microcode** (SHDS +40, see 2f).
 - **GT6: 168,414 of 169,980 images have offset 0** — the pixels are not in `body` (a 512x512 DXT5 is bigger than the file).
   To find with item 3 / item 5 (`body_s` or another file).
 
@@ -197,6 +200,154 @@ offset, size, format, mipmaps, width, height), +20 = MDL3 header 0x6C.
 - So there is **no UV scale**: the decoded value is the texture coordinate, and V is not flipped by a constant.
   (PDTools' note about a scale "in the shader programs" may concern GT6 packed meshes, whose packed elements have their own
   bit layout and scale: item 4.)
+
+## Roadmap 2f: byte coverage of the whole file
+
+`gtdev mdl3-coverage <files.tsv> <groupRegex> <out.txt>` (or `mdl3-coverage <file> <out.txt>` for one file with the list of
+unclaimed runs and of claims). Every structure below *claims* its bytes; a byte claimed by two different structures is
+reported as an overlap (a layout error), and what nobody claims is counted per header region. Table links and counts are
+checked in the same pass. Run on 16,808 files: car body (GT5 `car\hq|race`, GT6 `car\...\hq|race\body`), interior
+and wheel files of both games (`tests\mdl3_tables\coverage_all.txt`):
+
+| | GT5 v6 (841) | GT5 v8 (9815) | GT6 v14 (6135) |
+|---|---:|---:|---:|
+| bytes claimed | 9,354,837 | 6,360,664,282 | 2,439,262,461 |
+| unclaimed, zero | 463,786 | 256,740,280 | 29,496,899 |
+| **unclaimed, non-zero** | 2,599,233 | 1,845,407,982 | **0** |
+| overlaps | 0 | 0 | 0 |
+| failed checks | 2 (0x78) | 31 (0x78) | 0 |
+
+- GT6: **every byte of every car, interior and wheel file is explained** (non-zero bytes all claimed, no overlap, no failed check).
+- GT5: all unclaimed non-zero bytes but 11 are in the shapes region: the **GT5 packed geometry** (item 4).
+  The other 11 are in GT5 `car\race\00040079`, the file that is 0x40 bytes short: they sit in the 0x40 padding after its
+  last fragment program microcode and look like one more FP instruction (the file is cut).
+- The 33 failed checks are 34 stale 0x78 records (see 0x78).
+- Not covered: 17 old files (versions 1, 2, 4 in GT5 `car\interior` and `wheel`): their layout is different (header fields
+  move), out of scope for the car work.
+
+### Named float blocks (0x54, count 0x2A)
+
+u32 pointers to blocks `u32 name, u16 tag, u16 n, n x f32`.
+
+| Name | Tag | n | Meaning |
+|---|---:|---:|---|
+| `LightMaskSH` | 5 | 75 | spherical harmonics coefficients (25 x RGB) |
+| `InteriorSH` | 6 | 75 | same for the interior |
+| `InteriorSHAdjust` | 7 | 3 | |
+| `LightMaskCenter` | 610 | 3 | a point |
+| `occlusion` | 600 | 12 x k | k quads (4 corners x xyz) |
+| `GT_INTERIOR` | 113 | | |
+| GT6 `Front/Rear Normal/Option` | (junk) | 9 | |
+
+### VM: host registers, outputs, bytecode, context (0x58, 0x5C, 0x60..0x68, 0xBC)
+
+The model VM of PDTools. Opcodes and operand sizes from PDTools; operands are **little-endian** (the rest of the file is big-endian).
+- **0x58 (count 0x1E)**: host registers the game writes, 8 bytes `u32 name, u16 array length (1), u16 register index`, sorted by name:
+  `lightMode`, `taillamp`, `passing`, `wiperFront`, `meter_rot0`, `custom0`... Indices are unique; 0..n-1 except 14 GT6 files with gaps.
+  `reval`/`rpop` with bit 15 set read/write these registers.
+- **0x5C (count 0x22)**: VM outputs the game reads (`wiper0_00u`...): `u32 name, u32 0x10000 | slot`, slot < VM stack size (header 0x20).
+- **0x64**: bytecode; **0x60 = code length**, 0x68 = end of the VM block (code + storage, zero on disk).
+  Model +24 and VM context +00/+04 are entry points into it.
+- **0xBC**: VM context, 0x20 bytes: +00/+04 entry points, +08 u16 curve count (+0A u16, set in GT5), +0C curve list
+  (8 bytes: u16 type 1, u16 point count, u32 offset of (x, y) f32 pairs), +10/+14 always 0x9A1BC4 / 0x18FD74 in GT5, 0 in GT6.
+
+### Per-material runtime records (0x78, count 0x26)
+
+0x14 bytes: u16 material index (strictly increasing), u16 n, 12 zero bytes, u32 offset of n x 12 bytes (zero on disk: runtime space).
+What n counts is **open** (it is not the sampler count, shape count, draw count, pass count or animation row count).
+Stale records, GT5 only: 34 records in 33 files (car `hq\00010101`, the rest wheels) have material index == material count
+(once count + 1), 33 of them as the last record: probably materials deleted after the table was built. Never in GT6.
+
+### Shader references and passes (0x88, count 0x2C)
+
+0x28 bytes: +00 name (same as the material data), +04 SHDS definition index, +08 0, +0C passes (u16 count +10),
++12 u16 = 1 exactly when +14 is set (GT5 only), +14 offset of 8 bytes (u32 pointer to its own +04, u16, u16),
++18 constant key count, +1C constant keys, +20/+24 zero.
+Pass, 0x20 bytes: u16 n0, u16 n1, u32 list0 (n0 x 8, offset 0 iff n0 is 0), u32 list1 (n1 x 8), u32 SHDS vertex program record,
+u32 SHDS fragment program record (both always point exactly at a record), u16 x4, u32 0.
+Material data +24 == the pass list of its shader reference.
+
+### SHDS fragment programs and the +30..+40 tables
+
+- **+2C fragment programs** (count +1A), 0x48 bytes: +00/+04 offset/size of an FP header block, +08 u16 count of a +10 table,
+  +0A u8 count of +38 (global samplers), +0B u8 count of +14 (samplers), +0C u16 count of +18 (constants); all four tables have
+  0x10-byte named entries.
+- **+38** (count +30): 0x10 records: u16, u16 name count, u32 list of name pointers, u32 sub record
+  (0x10: u16, u16 length A, u32 data A, u32 data B (4 bytes)).
+- **+3C** (count +32, == material data count in 4575 of 4630 files): pointers to records of 0x27 + n bytes
+  (u32 name, u32, u32 n, u32 offset == record + 0x27, then the n bytes).
+- **+40** (count +34): 0x20 records: u32 = the +00 of some FP record, u32 offset / u32 size of the **FP microcode**
+  (size a multiple of 16; in GT5 it sits after the last TXS3 image), rest zero.
+
+### Model material lists (0xB0, 0xB4)
+
+One 0x40 record per model: +00 offset of a u16 list (count +30) that equals, in every model of every car file,
+**the sorted list of materials of the shapes the model's command stream draws**. +04..+27 zero; +28/+2A/+2C/+2E u16 (open).
+0xB4 == the models offset.
+
+### Material parameter animation (0xB8)
+
+Header 0x20: u16 n4, u16 n8, u32 params, u32 curves, i32 x2 VM pointers (-1), u32 +14 table, u16 n14, u16 binding count
+(== max binding index + 1), u16.
+- param 0x10: u32 name, i16 VM storage index or -1, i16 row count, u32 rows, f32 default value;
+- row 0x10: u16 material data index, u16 constant slot, u16 binding index, u16 (mostly 0, up to 11), 4 x u16 curve (0xFFFF none);
+- curve 8 bytes: u16, u16 point count, u32 offset of (x, y) f32 pairs (piecewise linear);
+- +14 table: n14 named 0x10 entries (`rcs`, `rcs2`).
+So a VM value (or a host input) drives a curve that writes a material constant: brake light glow, meters, lamps.
+
+### Joints, rigid bodies, soft bodies (0x98..0xA4, 0xC0)
+
+- **0x9C (count 0x98)**, the "wing data" of PDTools: **joint constraints**, 0x80 bytes, angle limits (+-2 pi, +-pi/2);
+  keys at 0xA0 (count 0x9A) name them: `BASE`, `steering`, `shift_H`, `wiper_R`...
+- **0xA4 (count 0x28)**: pointers (then padding to 0x80) to 0x280-byte **rigid body** blocks: box min/max, inertia tensor,
+  parameters, 8 corners, an edge list, constant 0x00800630.
+- **0xC0 (count 0xC4, GT5 only, every car file)**: pointers to **soft body (FEM damage)** blocks. Header 0x40: u16 node count,
+  u16, u16, u16 tetrahedron count, u16 1, u16 triangle count, u16 n6, u16 n7, u32; offsets of nodes (vec3), node values (f32),
+  tetrahedron matrices (0x1B0 each), constants (0x50), triangles (u16 x3), a u16 list (n6); +3C == own offset.
+  Header 0xC6 == 0xC8 == 0x124.
+
+### GT5 geometry block (0x94, no count, v8 only)
+
+Header 0x34: u16 n1..n5, ...; p1 (n1 x 0x20), p2 (n2 pointers to 0x20 records), p3 (n3 x 0x20, +04 size / +08 offset of a stream
+description with quantization floats), p4 (n4 == n1 lists of RSX attribute formats, e.g. `01 00 14 32` = attribute 1, stride 0x14,
+float x3), p5 (n5 == n3 lists of 12-byte entries), p6 (f32 1.0), p7 runtime space.
+Together with the shape packed references (shape +2C, 0x40: 12 f32, u32 offset, u32 index) this describes the GT5 packed
+geometry; it looks like PS3 Edge geometry. Decoding it is item 4.
+
+### PMSH (0xD0, v14) and packed mesh keys (0xCA/0xCC)
+
+Header 0x40: `PMSH`, +04 u16 2, u16 flag, +08 own offset, +0C == header 0x6C when the flag is 1, +10 mesh count, +12 0x1C count,
++14 layout count, +16 declaration count, +18 meshes, +1C entries (8 bytes: u8, u8, u16 data size, u32 data offset; 39 MB of data
+over the GT6 cars), +20 bit layout arrays (u32 count, u32 offset of count x 0x30), +24 declarations (0x10: u8 packed element
+count, u8 raw element count, u8 packed stride, u8 raw stride, u32, element list (4 bytes each), name list), +30/+34 0x20 records.
+Shape packed ref +34 = mesh index, or -1 (GT6 interiors/wheels).
+
+**Mesh** (0x30): +00 i16 declaration, +02 i16 bit layout array, +04 i16, +06 u8 smooth data count (s), +07 u8 (k, 1 or 8),
++08 s x k x 8 bytes, +10 s smooth mesh data (0x30 each), +14 s bboxes (0x60 = 8 corners each).
+In GT6 **car bodies** the smooth data offsets are 0 (the data is in `body_s`); in **interiors and wheels** it is in the MDL3.
+
+**Smooth mesh data** (0x30, PDTools `PMSHSmoothMeshData`; the sizes below are exact on all 6135 GT6 files):
+| Off | Field | Size of the data |
+|---|---|---|
+| +00 | packed vertices | sum over the layouts of ceil(V x bits / 8) |
+| +08 | 10-byte entries | +24 x 10 |
+| +0C | raw vertices | V x declaration raw stride |
+| +10 | +28 quadwords, then per-vertex streams: 1 byte (flag 0x40), 4 bytes (flag 0x80) | +28 x 16 + pad16(V) + pad16(4 V); the padding is not always zero |
+| +14 | packed indices | +2A x 16 |
+| +18 | smooth (tessellation) commands | +2C x 16 |
+| +20 | u16 flags (0x40, 0x80, 0x20, 0x04, 0x200, 0x8000 seen) | |
+| +22 | V = vertex count of both vertex arrays | |
+| +26 | output vertex count, >= V (larger when the SmoothMesh job adds vertices; PDTools calls it the raw count) | |
+| +2E | u8 index bit size | |
+
+**Packed mesh keys** are not mesh names: each is (shader family name, material data +04 index) of an existing material data.
+
+### Shape stream map (0xDC, v14): the link to body_s
+
+Header 0x20: u32 group count, u16, u16 2, u32 groups. Group 0x0C: u32 name (`/`, `custom_brake0`, `custom_caliper0`), u32 n,
+u32 items (0x18: a stream + u32 m + u32 sub streams (m x 0x10)). Stream 0x10: u32 0, u32, u16 c1, u16 c2, u32 chunk list
+((c1 + c2) x 8: u32 `0x80000000 | compressed size` (u16) + u32 body_s offset (0x80-aligned), or plain pairs).
+These chunks are the deflate blocks of `body_s`: item 5.
 
 ## Notes on PDTools (Nenkai)
 
@@ -214,9 +365,19 @@ Differences and open points we found:
 - SHDS header: PDTools reads the definition count at +16 and the program count at +18 like we do; the 0x2C/0x40 tables are not verified here.
 - TXS3 in MDL3: the reader loads pixels only through the TXS3 texture info list, which is empty (count 0) in MDL3 files;
   TXS3Converter (Nenkai, MIT, cloned in `ref\`) uses the same reader for MDL3 input.
+- Model +12 is u8 flags + u8 bounds count, not a u16 count.
+- "Wing data" (0x9C) are joint constraints for all moving parts (steering, shifter, wipers), not only wings.
+- The car body stream map is at header 0xDC in v14 (not 0xAC, which is 0 in every car file).
+- Packed mesh keys are (shader family, material data index) pairs, not per-mesh names.
+- The shader reference pass starts with two u16 counts (two lists), not one u32.
+- PMSH smooth data: the raw vertex array has +22 vertices (PDTools `PackedFlexVertCount`), not +26 (`NonPackedFlexVertCount`,
+  the output count); +08 and +10 are data blocks too (sizes above); mesh +08/+14 scale with +06/+07.
 
 ## Still to explain
 
-Tables 0x54, 0x78, 0x88 (shader references are in it, rest to check), 0xA4, 0xC0 (v8), wing data (0x9C), fvf records (0x40),
-VM bytecode/data (0x64..0xBC), PMSH (v14). Material header byte +04; material data +18/+1C/+24; SHDS second program table
-and vertex program microcode; data after the last TXS3 image (GT5); where GT6 image pixels are.
+- GT5 packed geometry (shapes region, 0x94 block, shape packed refs) and the contents of the GT6 PMSH data
+  (located and sized exactly, not decoded): item 4.
+- GT6 `body_s` chunks (stream map 0xDC) and where GT6 image pixels are: items 3 and 5.
+- Small open fields (data is fully located, meaning unknown): material block byte +04 (no match with any count),
+  0x78 n, 0xB0 +28..+2E, animation row +06, VM context +0A, header 0x7C, the u16s of the pass and of the SHDS +38/+3C records,
+  FP header block and VP/FP microcode contents (RSX programs).
