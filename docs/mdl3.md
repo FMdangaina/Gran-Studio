@@ -106,7 +106,8 @@ Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; 
 - Triangles of plain GT5 shapes (first look, 3 cars with `gtdev mdl3-obj`, all shapes): u16 indices at +18 (absolute),
   **+14 is the index count = 3 x triangle count**, plain triangle lists, no strips and no 0xFFFF restarts. To check on all files in item 4.
 - In GT6 a shape is either plain (vertex count set, offsets 0: the data must be in `body_s`) or packed, never both.
-- In GT5 most body shapes are packed (all of them in car 00010007 hq).
+- In GT5 most body shapes are packed (all of them in car 00010007 hq): see "GT5 packed geometry".
+- Plain shapes in GT5 wheels: the `Shadow` format has S1 positions (scale about bbox x 2, not exact; not visible geometry, open).
 
 ## Vertex formats (FVF, header 0x18 count, 0x40 offset) — verified
 
@@ -312,7 +313,68 @@ Header 0x34: u16 n1..n5, ...; p1 (n1 x 0x20), p2 (n2 pointers to 0x20 records), 
 description with quantization floats), p4 (n4 == n1 lists of RSX attribute formats, e.g. `01 00 14 32` = attribute 1, stride 0x14,
 float x3), p5 (n5 == n3 lists of 12-byte entries), p6 (f32 1.0), p7 runtime space.
 Together with the shape packed references (shape +2C, 0x40: 12 f32, u32 offset, u32 index) this describes the GT5 packed
-geometry; it looks like PS3 Edge geometry. Decoding it is item 4.
+geometry (PS3 Edge style). **Decoded in item 4, see "GT5 packed geometry" below.** p3 = one stream description per packed shape.
+
+## GT5 packed geometry (item 4b/4c) — verified
+
+`GTFormats/Mdl3/Mdl3Packed.cs`, checked by `gtdev mdl3-packed` on every GT5 car\hq, car\race, car\interior and tire file
+(204,792 packed shapes, 276,794 segments, 0 exceptions; GT5 wheels have no packed shapes). Exported by `gtdev mdl3-obj`.
+
+**Chain.** A shape is packed when its vertex data offset is 0 and shape +2C points to a 0x40 record whose +30 is set.
+- 0x40 record: +00..+2F 12 floats (0 on body shapes; plain shapes with a record carry values like 1.0 / 0.0008 here), +30 -> **H**.
+- H: +04 -> L, +0C u16 segment count, +0E u16 (0x35, 0x39, 0x4C...).
+- L: u16 1, u8, u8 flags (0x01, 0x25), +04 -> M, +08 -> 0x14 bytes.
+- M: u16 1, **u16 stream description index X** (p3[X]), u16 Y (2 x running segment number), u16 segment count, +08 -> list of segment pointers.
+
+**Segment record S** (0x50 bytes, more with the optional blocks):
+
+| Off | Field |
+|---|---|
+| +00 | -> stream list: per stream u32 offset, u32 -1 |
+| +04 | -> index info, one 0x10 entry per LOD: u16 triangles, u16 0, u16 index data size, u16 0, u32 offset, u32 -1 |
+| +08 | -> list of (LOD count - 1) extra streams (only with LODs; look like vertex -> parent pairs for geomorphs, open) |
+| +0C | -> optional extra block (73,741 hq shapes have one; u16 lists, maybe skinning/blend data, open) |
+| +1C | u32 record size (0x50, 0x9C, 0xD0) |
+| +20 | u8 stream count (1 or 2), u8 1, **u8 LOD count**, u8 extra stream count |
+| +24 | -> count block, one 8-byte entry per LOD: u16 kept, u16 added, u32 LOD count. LOD k uses the first kept + added vertices; kept(k) = kept(k+1) + added(k+1) |
+| +28 | -> position format (0 when positions are F32 in stream 0) |
+| +2C | u16 position format size (0, 0x10, 0x34), u16 (5, 0x0A, 0x0D...) |
+
+**Position format** (0x10 or 0x34 bytes): +08 `01 63 00 10` or `01 03 00 24`, **+0C/+0D/+0E bits per axis** (8..16),
++10 six floats (= the car frame, 0x34 only), **+28/+2C/+30 u32 grid offsets x 4** (0x34 only).
+Positions are a MSB-first bitstream in the last stream: per vertex x, y, z with those bit counts.
+- grid = raw + offset / 4: every segment of a car maps into **one 16-bit grid per car** (raw + offset never passes 65535).
+- **position = grid x F / 2^21 + (F + G)**, with F = the first float triple and G = the second (the car frame, the same in
+  every stream description and position format of a file; per car, 903 different sets in GT5 hq).
+- Verified exactly: on 8 GT5 shapes that also exist as a plain twin (same name and triangle count) every vertex lands on the
+  plain vertex within 2e-5 m (half a grid step); all 204,792 shapes have every vertex inside their shape bbox
+  (2 race shapes: 1 vertex each just outside).
+
+**Stream description** (p3[X], one per packed shape): u16 size, u16 flag; flag 8: u16 output stride, u16 0, input layout,
+output layout; flag 4: one layout (input = output, positions F32 inside). Then the car frame floats when the size leaves room.
+Layout: u16 attribute count, u16 stride, 4 bytes per attribute: u8 id, u8 type << 4 | count, u16 byte offset.
+- Types: 0 F32, 1 F16, 2 I16N (/32767), 4 X11Y11Z10N (like RSX CMP: x bits 0-10, y 11-21, z 22-31; 99.97% unit length), 5 U8N.
+- Ids (matched with the shape FVF names): 01 position, 02 normal, 03 tangent (I16N x4), 05 texcoord (2 components: map12
+  or map1, map34 when map12 has 4), 11 second texcoord, 90/91/92 the remaining FVF elements in order
+  (colorSet1 when U8N/F16 x4, map12 x4 when I16N/F32 x4).
+- The output layout does not follow the shape FVF offsets (the FVF has the position first); output stride == FVF size in
+  all but 22 car shapes and the tire formats.
+- Stream 0 = the input layout (stride x vertex count, padded to 16); stream 1 (two-stream segments) = the position bits.
+  Single-stream segments: either all attributes with F32 positions, or only the position bits.
+
+**Triangles** (Edge-style compressed indices): header u16 bits per value, u16 value count n, u16 n again, u16 0; n values
+(vertex indices, MSB first); then **from the next 2-byte boundary** one 2-bit code per triangle:
+`3` = three new values, `0` = (a, c, new), `1` = (c, b, new) from the previous triangle (a, b, c); `2` never occurs.
+- Every value is used exactly once, every index < vertex count, 0 degenerate triangles; winding is consistent
+  (no directed edge used twice except where the data repeats a triangle, as plain shapes also do).
+- **Index data size = 8 + ceil(n x bits / 8) + ceil(triangles / 4) + 2** (the 2-byte alignment pad is not counted): exact on all segments.
+- LODs (race models, some hq/interior): each level has its own index data on the same vertex buffer (first kept + added
+  vertices); 96,701 levels check like LOD0; the last level is often empty (0 triangles, offset 0). 5 last levels index
+  past their count (open).
+
+**Shape +26 vs the segment triangle sum**: equal for 86,185 of 86,661 hq shapes (+26 is u16 and wraps on huge shapes).
+Where it differs the sum is always lower (by 1 .. 2588; every tire is 1 lower): likely triangles the Edge partitioner
+dropped (degenerate in float positions). Open: check for holes.
 
 ### PMSH (0xD0, v14) and packed mesh keys (0xCA/0xCC)
 
@@ -373,7 +435,7 @@ Differences and open points we found:
 - Header 0x6C is read as an offset; in 8 GT5 files it is past the end of the file, so it is likely a size.
 - Shape triangles: only triangle lists are read, strips return null ("Tristrip - FIX ME").
 - Packed meshes are read only for version >= 9 (GT6 `PMSH`). The GT5 packed reference (shape +0x2C, v8),
-  used by most GT5 car body shapes, is not handled.
+  used by most GT5 car body shapes, is not handled (decoded here, item 4).
 - `ReadPackedElement` starts reading at `PackedFlexVertCount` (a count used as an offset): to check against the data.
 - UVs: the source says itself that the scale is not understood. For GT5 plain shapes there is none (see above).
 - Materials: field names agree (`MaterialDataID`, `CellGcmParamsID` = our render state index); the 0x8000 external sampler
@@ -391,8 +453,9 @@ Differences and open points we found:
 
 ## Still to explain
 
-- GT5 packed geometry (shapes region, 0x94 block, shape packed refs) and the contents of the GT6 PMSH data
-  (located and sized exactly, not decoded): item 4.
+- GT5 packed geometry: decoded (above). Open: segment +08 extra streams (geomorph?) and +0C block, H +0E, L flags,
+  M Y, position format +08..+0B and +2E, the 0x40 record floats, p1/p2/p4/p5 tables (their link to p3), the shape +26 differences.
+- GT6 PMSH data (located and sized exactly, not decoded): item 4d.
 - GT6 `body_s` chunks (stream map 0xDC) and where GT6 image pixels are: items 3 and 5.
 - Small open fields (data is fully located, meaning unknown): material block byte +04 (no match with any count),
   0x78 n, 0xB0 +28..+2E, animation row +06, VM context +0A, header 0x7C, the u16s of the pass and of the SHDS +38/+3C records,

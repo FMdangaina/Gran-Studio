@@ -10,6 +10,7 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-models <files.tsv> <groupRegex> <out.txt> [dumpPath]   check model command streams / dump one file");
     Console.WriteLine("  mdl3-fvf <files.tsv> <groupRegex> <out.txt>   check vertex formats, decode plain positions vs bbox");
     Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ + MTL + PNG textures, shape stats in <out>.txt");
+    Console.WriteLine("  mdl3-packed <files.tsv> <groupRegex> <out.txt>   decode and check every GT5 packed shape");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
     Console.WriteLine("  txs3-survey <files.tsv> <groupRegex> <out.txt>   TXS3 image formats, mipmaps, computed vs record size");
@@ -25,6 +26,7 @@ return args[0] switch
     "mdl3-models" => Mdl3Models.Run(args[1..]),
     "mdl3-fvf" => Mdl3FvfCheck.Run(args[1..]),
     "mdl3-obj" => Mdl3Obj.Run(args[1..]),
+    "mdl3-packed" => Mdl3PackedCheck.Run(args[1..]),
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),
     "mdl3-matcheck" => Mdl3MatLayout.Run(args[1..]),

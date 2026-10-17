@@ -14,9 +14,12 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
 - [x] 4a. Plain shapes to OBJ (`gtdev mdl3-obj`): positions, CMP normals, UVs (V flipped), `.mtl` with the diffuse/alpha
   maps as PNG. GT5 wheel `wheel\hq\00010098.04` checked by the user: perfect. GT5 `car\hq\00010075`: everything but the body.
   Open: wheel `Shadow` format has S1 positions (scale about bbox x2, not exact; not visible geometry)
-- [ ] 4b. GT5 packed vertices: shape packed ref (+2C, 0x40 bytes) + geometry block 0x94 -> positions/normals/UVs
-  (first test: the 3 `GTBE_BODY` shapes of `car\hq\00010075`)
-- [ ] 4c. GT5 packed indices (PS3 Edge compressed?)
+- [x] 4b. GT5 packed vertices (`Mdl3PackedShape`, `gtdev mdl3-packed`): segments, per-shape stream descriptions (0x94 p3),
+  fixed-point positions in one 16-bit grid per car (position = grid x F / 2^21 + F + G, exact against plain twins), normals,
+  UVs, LODs. All 204,792 GT5 packed shapes decode, every vertex inside its bbox (2 shapes: 1 vertex out).
+  Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095 look whole
+- [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
+  Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), 5 last LOD levels, segment +08/+0C blocks
 - [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices)
 - [ ] 4e. Check over every car file, 0 failures
 

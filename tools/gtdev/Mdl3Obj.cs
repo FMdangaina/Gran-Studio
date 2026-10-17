@@ -1,12 +1,12 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using GTFormats;
 using GTFormats.Mdl3;
 using GTFormats.Txs3;
 
 /// <summary>
-/// mdl3-obj &lt;file&gt; &lt;out.obj&gt;: export the plain shapes (vertex buffer inside the MDL3) as an OBJ, one group per shape.
-/// Research export to look at the geometry; packed shapes are skipped. Also writes &lt;out&gt;.txt with the index data per shape.
+/// mdl3-obj &lt;file&gt; &lt;out.obj&gt;: export the plain and GT5 packed shapes as an OBJ, one group per shape, with an .mtl
+/// and the diffuse textures as PNG. Research export to look at the geometry. Also writes &lt;out&gt;.txt with per-shape stats.
 /// </summary>
 static class Mdl3Obj
 {
@@ -23,7 +23,8 @@ static class Mdl3Obj
         var obj = new StringBuilder();
         var log = new StringBuilder();
         var ci = CultureInfo.InvariantCulture;
-        int vBase = 1, vtBase = 1, vnBase = 1, exported = 0, skipped = 0;
+        int vBase = 1, vtBase = 1, vnBase = 1, exported = 0, skipped = 0, packed = 0;
+        float[]? frame = null;
         string mtlName = Path.GetFileNameWithoutExtension(args[1]) + ".mtl";
         obj.AppendLine($"mtllib {mtlName}");
         var usedMaterials = new SortedSet<int>();
@@ -32,6 +33,60 @@ static class Mdl3Obj
         {
             var sh = m.Shapes[s];
             string name = m.ShapeNames.TryGetValue(s, out var n) ? n[0] : $"shape{s}";
+            if (Mdl3PackedShape.IsPacked(r, sh))
+            {
+                try
+                {
+                    frame ??= Mdl3PackedShape.CarFrame(r);
+                    var ps = Mdl3PackedShape.Read(r, sh);
+                    var uvAttr = PackedUv(m, sh, ps);
+                    var nAttr = ps.Desc.Input[2] is { Type: 4 } na ? na : null;
+                    obj.AppendLine($"g s{s:D4}_{Root(name)}_{Short(name)}");
+                    if (sh.MaterialIndex >= 0) { obj.AppendLine($"usemtl m{sh.MaterialIndex:D3}"); usedMaterials.Add(sh.MaterialIndex); }
+                    int triSum = 0;
+                    foreach (var seg in ps.Segments)
+                    {
+                        var p = ps.Positions(r, seg, frame);
+                        foreach (var q in p) obj.AppendLine(string.Create(ci, $"v {q.X} {q.Y} {q.Z}"));
+                        if (uvAttr != null)
+                            for (int v = 0; v < seg.VertexCount; v++)
+                            {
+                                var t = ps.Attribute(r, seg, uvAttr, v);
+                                obj.AppendLine(string.Create(ci, $"vt {t.X} {1 - t.Y}"));
+                            }
+                        if (nAttr != null)
+                            for (int v = 0; v < seg.VertexCount; v++)
+                            {
+                                var t = ps.Attribute(r, seg, nAttr, v);
+                                obj.AppendLine(string.Create(ci, $"vn {t.X} {t.Y} {t.Z}"));
+                            }
+                        var pt = Mdl3PackedShape.Triangles(r, seg, out _, out _, out _);
+                        for (int i = 0; i < pt.Length; i += 3)
+                            obj.AppendLine($"f {PCorner(pt[i])} {PCorner(pt[i + 1])} {PCorner(pt[i + 2])}");
+                        string PCorner(int i) => (uvAttr, nAttr) switch
+                        {
+                            (not null, not null) => $"{i + vBase}/{i + vtBase}/{i + vnBase}",
+                            (not null, null) => $"{i + vBase}/{i + vtBase}",
+                            (null, not null) => $"{i + vBase}//{i + vnBase}",
+                            _ => $"{i + vBase}",
+                        };
+                        vBase += seg.VertexCount;
+                        if (uvAttr != null) vtBase += seg.VertexCount;
+                        if (nAttr != null) vnBase += seg.VertexCount;
+                        triSum += seg.TriangleCount;
+                    }
+                    log.AppendLine($"{s,4} PACKED segments={ps.Segments.Count} verts={ps.Segments.Sum(x => x.VertexCount)} tris={triSum} (+26 {sh.TriCount}) " +
+                                   $"uv={(uvAttr == null ? "-" : $"{uvAttr.Id:X2}")}  {name}");
+                    exported++;
+                    packed++;
+                }
+                catch (Exception e)
+                {
+                    log.AppendLine($"{s,4} PACKED FAILED {e.Message}  {name}");
+                    skipped++;
+                }
+                continue;
+            }
             if (sh.VerticesOffset == 0 || sh.TriOffset == 0 || sh.FvfIndex < 0)
             {
                 log.AppendLine($"{s,4} v={sh.VertexCount,6} triCount={sh.TriCount,6} flags={sh.Flags:X4} SKIPPED packed={sh.PackedRefOffset:X}  {name}");
@@ -73,7 +128,7 @@ static class Mdl3Obj
                 continue;
             }
 
-            obj.AppendLine($"g s{s:D4}_{Short(name)}");
+            obj.AppendLine($"g s{s:D4}_{Root(name)}_{Short(name)}");
             if (sh.MaterialIndex >= 0) { obj.AppendLine($"usemtl m{sh.MaterialIndex:D3}"); usedMaterials.Add(sh.MaterialIndex); }
             var nrm = fvf["normal"];
             var uv = fvf["map1"] ?? fvf["map12"];
@@ -117,8 +172,24 @@ static class Mdl3Obj
         WriteMtl(m, usedMaterials, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, mtlName));
         File.WriteAllText(args[1], obj.ToString());
         File.WriteAllText(Path.ChangeExtension(args[1], ".txt"), log.ToString());
-        Console.WriteLine($"{exported} shapes exported, {skipped} skipped (packed, no data or non-float positions) -> {args[1]}");
+        Console.WriteLine($"{exported} shapes exported ({packed} packed), {skipped} skipped (no data, non-float positions or failed) -> {args[1]}");
         return 0;
+    }
+
+    /// <summary>
+    /// UV source of a packed shape: the input attribute with the type and count of the shape FVF's map1/map12
+    /// (RSX F/SF/S1/UB = packed types 0/1/2/5), preferring id 05; else id 05 if present.
+    /// </summary>
+    static Mdl3PackedAttribute? PackedUv(Mdl3File m, Mdl3Shape sh, Mdl3PackedShape ps)
+    {
+        var inp = ps.Desc.Input.Attributes.Where(a => a.Id is not (1 or 2 or 3)).ToList();
+        if (sh.FvfIndex >= 0 && sh.FvfIndex < m.Fvfs.Count && (m.Fvfs[sh.FvfIndex]["map1"] ?? m.Fvfs[sh.FvfIndex]["map12"]) is { } e)
+        {
+            int type = e.Type switch { RsxVertexType.F => 0, RsxVertexType.SF => 1, RsxVertexType.S1 => 2, RsxVertexType.UB => 5, _ => -1 };
+            var hit = inp.Where(a => a.Type == type && a.Count == e.Count).OrderBy(a => a.Id == 5 ? 0 : 1).ThenBy(a => a.Id).FirstOrDefault();
+            if (hit != null) return hit;
+        }
+        return inp.FirstOrDefault(a => a.Id == 5);
     }
 
     /// <summary>Top 20 files by share of plain vertices (the ones an OBJ export shows best).</summary>
@@ -215,6 +286,9 @@ static class Mdl3Obj
         }
         File.WriteAllText(path, sb.ToString());
     }
+
+    /// <summary>First node of the shape path (GTBE_BODY, GTBE_SHADOW_BOX, FIX1...).</summary>
+    static string Root(string path) => path.Split('|', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
 
     static string Short(string path)
     {
