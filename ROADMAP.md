@@ -6,47 +6,19 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-### 4. Geometry
-Decode every shape of every car file to triangles (positions, normals, UVs) and check them visually (OBJ export).
-Done when every GT5 and GT6 car/interior/wheel shape decodes (positions inside the shape bbox, indices in range,
-triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.md`.
+### 5. GT6 `body_s`
+Container known (3d: stream map, bundles, images), shape data decoded (4d). Explain what the parts of the stream map
+are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
+against the game data) and the GT6 vs GT5 differences of the same car are written down. Findings in `docs/mdl3.md`.
 
-- [x] 4a. Plain shapes to OBJ (`gtdev mdl3-obj`): positions, CMP normals, UVs (V flipped), `.mtl` with the diffuse/alpha
-  maps as PNG. GT5 wheel `wheel\hq\00010098.04` checked by the user: perfect. GT5 `car\hq\00010075`: everything but the body.
-  Open: wheel `Shadow` format has S1 positions (scale about bbox x2, not exact; not visible geometry)
-- [x] 4b. GT5 packed vertices (`Mdl3PackedShape`, `gtdev mdl3-packed`): segments, per-shape stream descriptions (0x94 p3),
-  fixed-point positions in one 16-bit grid per car (position = grid x F / 2^21 + F + G, exact against plain twins), normals,
-  UVs, LODs. All 204,792 GT5 packed shapes decode, every vertex inside its bbox (2 shapes: 1 vertex out).
-  Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095 look whole
-- [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
-  Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), 5 last LOD levels, segment +08/+0C blocks
-- [x] 4c.1 Export fixes from `ISSUES.md` (checked by the user in ZModeler 2.2.6: meshes import correctly; the export format
-  will change when it has to be usable, item 6): shared decoder `Mdl3Mesh`;
-  readable object names from the Maya paths (`ShapeNaming`); only the visible models (no shadow / self-shadow / light
-  mask copies, `--all-models` for all); one file per LOD level; `gtdev mdl3-gltf` with the node hierarchy.
-  `gtdev mdl3-normals`: low LODs reuse the LOD0 normals (agreement 99.5% LOD0 -> 89.7% LOD4 on GT5 race), winding stays
-  consistent, so not a decoding error. Open: suspension parts (discs, calipers) have no position in the MDL3
-  (op6 = engine matrix slot), segment +08 LOD streams (maybe LOD normals/positions)
-- [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices). **Decoded** for the data held
-  in the MDL3 (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 interior/wheel/tire/carparts files, 61,397 blocks, 0 positions
-  outside the box, 3 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Demio interior OK for the
-  user (ZModeler); wheel was wrong (double-buffered vertex loads), fixed and checked by the user (ZModeler: OK).
-  **GT6 bodies** decoded from the `body_s` bundles (`Mdl3BodyS`: PMSH and plain shape records): all 2454 bodies,
-  267,778 blocks, 0 exceptions, 99.47% triangles agree with the normals. Normals of packed CMP declarations are the
-  32-bit W of the position layout (was read from the 4-byte stream: 91% agreement); map34 shares map12's layout.
-  Demio body: 200/200 shapes, checked by the user in ZModeler (LOD0 whole, "everything in order").
-  Left: 14 body + 3 interior blocks with unused
-  vertices, 11 flag 0x01 race blocks (position only, outside the box)
-- [ ] 4e. Check over every car file (`gtdev mesh-check`, `tests\mesh_check`): about 900,000 shapes of GT5/GT6 car,
-  interior, wheel, tire and carparts files, **all decode** with the shared decoder. Found on the way: GT5 plain
-  triangle strips (shape flags nibble 6, restart +20), S1 shadow positions = raw / 2^k (k from the shape bbox; where
-  the game stores it is open), empty tire templates. Left: 3 GT5 race shapes (2 x 1 vertex 1 mm out, 1 index at the
-  last LOD), 19 files of MDL3 version 1-4 not read (other header).
+- [ ] 5a. `/` sub streams: count per car against the paint colours of the car (specdb), what changes between them
+  (BRDF images only, or also shapes / other images)
+- [ ] 5b. `custom_*` groups (`custom_brake0`, `custom_caliper0`, `custom_a0`..`custom_f0`): which shapes and images each
+  item holds, how the model selects a variant (switches), the part names they stand for
+- [ ] 5c. GT6 vs GT5 on the same car code (963 cars in both): models, shapes, LODs, materials, textures
 
 ## Next
 
-5. **GT6 `body_s`** — container known (3d: stream map, bundles, images), shape data decoded (4d); left:
-   the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
 6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model
    hierarchy (models, Maya groups, shapes, switch variants, LODs) next to the 3D view, so the user understands how a
    car is built (requested by the user 2026-10-18).
@@ -116,3 +88,34 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   each stream = deflate/raw chunks -> bundle (header with shape + image tables, then data); all 168,414 offset-0 images
   found and decoded, 0 failures; extra copies in variant bundles are identical; `txs3-png` reads them. RX-8 checked visually.
   Open for item 5: `/` sub streams = paint colours? (BRDF images), shape data in the bundles
+- **4. Geometry** (2026-10-18, **closed with reservations** by the user, for very small parts) — every shape of every
+  GT5/GT6 car, interior, wheel, tire and carparts file decodes to triangles (positions, normals, UVs); OBJ/glTF export
+  checked by the user in ZModeler 2.2.6; findings in `docs/mdl3.md`. Reservations, left open:
+  - 3 GT5 race shapes: 00800005 shapes 75 and 119 have 1 vertex 1 mm outside the box (known), 00740016 shape 72 has
+    1 wrong index at the last LOD level;
+  - 19 files of an older MDL3 version (1-4: 14 GT5 interiors, 3 wheels, 2 tires, e.g. tire 0661) have another header
+    and are not read;
+  - GT6: 14 body + 3 interior blocks with unused vertices, 11 flag 0x01 race blocks (position only, outside the box).
+
+  Decode every shape of every car file to triangles (positions, normals, UVs) and check them visually (OBJ export).
+  Done when every GT5 and GT6 car/interior/wheel shape decodes (positions inside the shape bbox, indices in range,
+  triangle count = shape +26) and sample cars look whole.
+
+- [x] 4a. Plain shapes to OBJ (`gtdev mdl3-obj`): positions, CMP normals, UVs (V flipped), `.mtl` with the diffuse/alpha
+  maps as PNG. GT5 wheel `wheel\hq\00010098.04` checked by the user: perfect.
+  Open: wheel `Shadow` format has S1 positions (see 4e)
+- [x] 4b. GT5 packed vertices (`Mdl3PackedShape`, `gtdev mdl3-packed`): segments, per-shape stream descriptions (0x94 p3),
+  fixed-point positions in one 16-bit grid per car (position = grid x F / 2^21 + F + G, exact against plain twins), normals,
+  UVs, LODs. All 204,792 GT5 packed shapes decode. Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095
+- [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
+  Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), segment +08/+0C blocks
+- [x] 4c.1 Export fixes from `ISSUES.md` (checked by the user in ZModeler 2.2.6): shared decoder `Mdl3Mesh`; readable
+  object names from the Maya paths (`ShapeNaming`); only the visible models (`--all-models` for all); one file per LOD
+  level; `gtdev mdl3-gltf` with the node hierarchy. `gtdev mdl3-normals`: low LODs reuse the LOD0 normals (not a
+  decoding error). Open: suspension parts (discs, calipers) have no position in the MDL3 (op6 = engine matrix slot)
+- [x] 4d. GT6 `PMSH` packed meshes: in-file data (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 files, 61,397 blocks) and
+  bodies from the `body_s` bundles (`Mdl3BodyS`: 2454 bodies, 267,778 blocks, 0 exceptions, 99.47% triangles agree with
+  the normals). Demio interior, wheel and body checked by the user in ZModeler
+- [x] 4e. Check over every car file (`gtdev mesh-check`, `tests\mesh_check`): about 900,000 shapes, **all decode** with the
+  shared decoder. Found on the way: GT5 plain triangle strips (shape flags nibble 6, restart +20), S1 shadow positions =
+  raw / 2^k (k from the shape bbox; where the game stores it is open), empty tire templates
