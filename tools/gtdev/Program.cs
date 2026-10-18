@@ -9,7 +9,10 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-records <files.tsv> <groupRegex> <table> <stride hex> <out.txt>   column stats of a table");
     Console.WriteLine("  mdl3-models <files.tsv> <groupRegex> <out.txt> [dumpPath]   check model command streams / dump one file");
     Console.WriteLine("  mdl3-fvf <files.tsv> <groupRegex> <out.txt>   check vertex formats, decode plain positions vs bbox");
-    Console.WriteLine("  mdl3-obj <file> <out.obj>   export the plain shapes as OBJ + MTL + PNG textures, shape stats in <out>.txt");
+    Console.WriteLine("  mdl3-obj <file> <out.obj> [--all-models]   shapes as OBJ (readable names, one file per LOD) + MTL + PNG, stats in <out>.txt");
+    Console.WriteLine("  mdl3-gltf <file> <out.gltf> [--all-models]   the same as glTF with the node hierarchy, one file per LOD");
+    Console.WriteLine("  mdl3-tree <file> [out.txt]   bones, VM registers and model command streams with shape names");
+    Console.WriteLine("  mdl3-normals <files.tsv> <groupRegex> <out.txt>   vertex normals vs triangle winding, per LOD level");
     Console.WriteLine("  mdl3-packed <files.tsv> <groupRegex> <out.txt>   decode and check every GT5 packed shape");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
@@ -26,6 +29,9 @@ return args[0] switch
     "mdl3-models" => Mdl3Models.Run(args[1..]),
     "mdl3-fvf" => Mdl3FvfCheck.Run(args[1..]),
     "mdl3-obj" => Mdl3Obj.Run(args[1..]),
+    "mdl3-gltf" => Mdl3Gltf.Run(args[1..]),
+    "mdl3-tree" => Mdl3Tree.Run(args[1..]),
+    "mdl3-normals" => Mdl3Normals.Run(args[1..]),
     "mdl3-packed" => Mdl3PackedCheck.Run(args[1..]),
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),

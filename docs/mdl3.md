@@ -376,6 +376,24 @@ Layout: u16 attribute count, u16 stride, 4 bytes per attribute: u8 id, u8 type <
 Where it differs the sum is always lower (by 1 .. 2588; every tire is 1 lower): likely triangles the Edge partitioner
 dropped (degenerate in float positions). Open: check for holes.
 
+### Export notes (item 4c.1)
+
+- **Models of a car file** (GT5 hq/race): `GTBE_BODY` (the car), `GTBE_INTERIOR_SHARE`, and helper models that copy
+  body shapes: `GTBE_SHADOW_BOX`, `GTBE_SHADOW_PLANE`, `GTBE_SS_BODY` / `GTBE_SS_SHADOW_BOX` (self shadow, `GT_SS_AUTOTIRE`
+  cylinders), `GTBE_LIGHT_MASK`, `GTBE_ILLUMINATION`, `GTBE_PROJECTION`. Exporting all of them overlaps the same surfaces.
+- **LODs**: hq files are `GT_LOD|LOD_H`, race files `GT_LOD|LOD_L` (whole-car levels in separate files); packed segments
+  add progressive levels (see above). Low levels reuse the LOD0 vertex normals on the kept vertices: `gtdev mdl3-normals`
+  on GT5 race, triangles agreeing with their vertex normals 99.55% (LOD0), 97.2, 95.1, 93.3, 89.7% (LOD4); directed edges
+  used twice 0.09% -> 1.55%, so the winding stays consistent and the drop is the simplification, not the decoder.
+  Plain `Flex`/`SimpleFill`/`Shadow`/`WheelBlurShadow` formats have no normal at all (decals, shadows).
+- **Part transforms**: `GTM_SUSPENSION_FL/FR/RL/RR` parts (brake discs, calipers) are in hub space (discs of all four
+  wheels at the same place). The command stream wraps them in `op14` (push) / `op15` (pop) with `op6 <u8>`
+  (0x0F..0x12 per wheel, 0x24..0x27 for the disc): engine matrix slots, not bones (00010075 has 1 bone, no host registers).
+  The wheel positions are not in the MDL3.
+- **Bones** (header 0x1A count, 0x50 offset, 0x48 bytes, `Mdl3Bone`): matrix, name, parent, id (`steering`, `_tmp_joint_nameN`).
+- `op5` switch: u16 value, u8 case count, relative targets. In 00010075 (no host registers) the value is 7 around the
+  day/night shapes and 0x0B..0x0E around the four caliper groups: engine state slots (meaning open).
+
 ### PMSH (0xD0, v14) and packed mesh keys (0xCA/0xCC)
 
 Header 0x40: `PMSH`, +04 u16 2, u16 flag, +08 own offset, +0C == header 0x6C when the flag is 1, +10 mesh count, +12 0x1C count,

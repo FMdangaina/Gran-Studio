@@ -8,6 +8,7 @@ public sealed class Mdl3File
     public List<Mdl3Model> Models { get; } = [];
     public List<Mdl3Shape> Shapes { get; } = [];
     public List<Mdl3Fvf> Fvfs { get; } = [];
+    public List<Mdl3Bone> Bones { get; } = [];
     public List<Mdl3Material> Materials { get; } = [];
     public List<Mdl3MaterialData> MaterialData { get; } = [];
     public List<Mdl3TextureInfo> TextureInfos { get; } = [];
@@ -25,6 +26,8 @@ public sealed class Mdl3File
         for (int i = 0; i < shapeCount; i++) Shapes.Add(Mdl3Shape.Read(Data, shapesAt + i * Mdl3Shape.Size));
         int fvfCount = Data.U16(0x18), fvfAt = (int)Data.U32(0x40);
         for (int i = 0; i < fvfCount; i++) Fvfs.Add(Mdl3Fvf.Read(Data, fvfAt + i * Mdl3Fvf.Size));
+        int boneCount = Data.U16(0x1A), bonesAt = (int)Data.U32(0x50);
+        for (int i = 0; i < boneCount; i++) Bones.Add(Mdl3Bone.Read(Data, bonesAt + i * Mdl3Bone.Size));
 
         // Material block at 0xE4: u16 materials, u16 data, u8 ?, u8 state blocks, u16 texture infos, 4 offsets.
         const int mat = 0xE4;

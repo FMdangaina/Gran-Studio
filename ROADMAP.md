@@ -20,6 +20,12 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095 look whole
 - [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
   Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), 5 last LOD levels, segment +08/+0C blocks
+- [ ] 4c.1 Export fixes from `ISSUES.md` (to be checked by the user in Blender): shared decoder `Mdl3Mesh`;
+  readable object names from the Maya paths (`ShapeNaming`); only the visible models (no shadow / self-shadow / light
+  mask copies, `--all-models` for all); one file per LOD level; `gtdev mdl3-gltf` with the node hierarchy.
+  `gtdev mdl3-normals`: low LODs reuse the LOD0 normals (agreement 99.5% LOD0 -> 89.7% LOD4 on GT5 race), winding stays
+  consistent, so not a decoding error. Open: suspension parts (discs, calipers) have no position in the MDL3
+  (op6 = engine matrix slot), segment +08 LOD streams (maybe LOD normals/positions)
 - [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices)
 - [ ] 4e. Check over every car file, 0 failures
 
