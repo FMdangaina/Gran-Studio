@@ -45,6 +45,19 @@ public sealed class Mdl3File
 
     public static Mdl3File Load(string path) => new(File.ReadAllBytes(path));
 
+    Mdl3Pmsh? pmsh;
+    bool pmshRead;
+
+    /// <summary>GT6 packed meshes (header 0xD0), null when the file has none.</summary>
+    public Mdl3Pmsh? Pmsh
+    {
+        get
+        {
+            if (!pmshRead) { pmsh = Mdl3Pmsh.Read(Data); pmshRead = true; }
+            return pmsh;
+        }
+    }
+
     /// <summary>8-byte key records: u32 name offset, u32 index.</summary>
     public IEnumerable<(string name, int index)> Keys(int countField, int offsetField)
     {

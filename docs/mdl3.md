@@ -420,6 +420,28 @@ In GT6 **car bodies** the smooth data offsets are 0 (the data is in `body_s`); i
 | +26 | output vertex count, >= V (larger when the SmoothMesh job adds vertices; PDTools calls it the raw count) | |
 | +2E | u8 index bit size | |
 
+**Decoding (item 4d)** — `Mdl3Pmsh.Decode`, `Mdl3PmshCommands`, checked by `gtdev pmsh-check` on every GT6 interior,
+wheel, tire and carparts file with the data in the MDL3 (4717 files, 61,397 data blocks, 53.6 M vertices, 82.5 M triangles):
+0 exceptions, 0 positions outside the block box, 99.25% of triangles agree with the stored normals, 0.133% directed
+edges used twice; 31 blocks leave some vertices unused (open).
+- Shape packed ref +34 = PMSH mesh index (also in interiors/wheels: the 4 wheels share the same data blocks).
+- **Packed elements**: one bit array per layout, V values each, MSB first, layouts in declaration order;
+  value = (raw / (2^(bits-1) - 1) + 2) x scale + offset (PDTools). The CMP normal never has a layout; colorSet1 and
+  colorSet2 together take one; colorSet1 alone has one only with data flag 0x40. Position is always the first element.
+- **Raw elements**: V records of the raw stride at +0C, element at its output offset (normal CMP, tangent, colours, UVs).
+- **Normals**: raw CMP element, else the 4-byte stream of flag 0x80 (+10 after +28 quadwords and the 1-byte stream of
+  flag 0x40), else not stored (12,554 blocks: the SmoothMesh job computes them; we use area-weighted face normals).
+- **Block box** (mesh +14, 0x60 per block): two groups of 4 corners stored as x[4], y[4], z[4] (oriented box).
+- **Commands** (+18, MSB first, 5-bit opcodes, operand widths from PDTools): the job keeps a 2^idxBits vertex ring;
+  `op5 slot, groups (first vertex, count - 1)` loads mesh vertices into consecutive slots; `op1 n` draws 4 n
+  triangles (idxBits per index, read in sequence from +14; the last group of 4 padded with (0,0,0));
+  `op15` holds a nested list (SmoothMesh cage) where `op2 n` draws 4 n quads (4 indices, split (a,b,c) (a,c,d),
+  d == c or d == a = triangle). The outer list of SmoothMesh blocks (op7/9/10/11/12/21/22/23) holds the
+  subdivision patch data (not needed for the cage). Every vertex used and the index data consumed up to its last
+  quadword on all but 31 blocks.
+- Open: the 1-byte stream (flag 0x40), +08 10-byte entries, output count > V (vertices added by the job),
+  several data blocks per mesh (merged for now), GT6 bodies (data in `body_s`, item 5).
+
 **Packed mesh keys** are not mesh names: each is (shader family name, material data +04 index) of an existing material data.
 
 ### Shape stream map (0xDC, v14): the link to body_s

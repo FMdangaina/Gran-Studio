@@ -13,6 +13,8 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-gltf <file> <out.gltf> [--all-models]   the same as glTF with the node hierarchy, one file per LOD");
     Console.WriteLine("  mdl3-tree <file> [out.txt]   bones, VM registers and model command streams with shape names");
     Console.WriteLine("  mdl3-normals <files.tsv> <groupRegex> <out.txt>   vertex normals vs triangle winding, per LOD level");
+    Console.WriteLine("  mdl3-samplers <files.tsv> <groupRegex> <out.txt>   texture samplers of the materials: in file / external, names");
+    Console.WriteLine("  pmsh-dump <file> [out.txt] | pmsh-probe <file> <mesh> | pmsh-survey / pmsh-check <files.tsv> <groupRegex> <out.txt>   GT6 PMSH research and check");
     Console.WriteLine("  mdl3-packed <files.tsv> <groupRegex> <out.txt>   decode and check every GT5 packed shape");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
@@ -32,6 +34,11 @@ return args[0] switch
     "mdl3-gltf" => Mdl3Gltf.Run(args[1..]),
     "mdl3-tree" => Mdl3Tree.Run(args[1..]),
     "mdl3-normals" => Mdl3Normals.Run(args[1..]),
+    "mdl3-samplers" => Mdl3Samplers.Run(args[1..]),
+    "pmsh-dump" => PmshDump.Run(args[1..]),
+    "pmsh-probe" => PmshProbe.Run(args[1..]),
+    "pmsh-survey" => PmshSurvey.Run(args[1..]),
+    "pmsh-check" => PmshCheck.Run(args[1..]),
     "mdl3-packed" => Mdl3PackedCheck.Run(args[1..]),
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),

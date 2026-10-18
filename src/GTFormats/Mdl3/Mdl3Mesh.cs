@@ -14,6 +14,22 @@ public sealed class Mdl3Mesh
     public Vector2[]? Uvs;
     public int[] Indices = [];
     public bool Packed;
+    public bool NormalsComputed;   // not stored in the file (GT6 SmoothMesh data): area-weighted face normals
+
+    /// <summary>Area-weighted vertex normals from the triangles (unit length; vertices without triangles get +Y).</summary>
+    public static Vector3[] FaceNormals(Vector3[] p, int[] idx)
+    {
+        var n = new Vector3[p.Length];
+        for (int i = 0; i + 2 < idx.Length; i += 3)
+        {
+            int a = idx[i], b = idx[i + 1], c = idx[i + 2];
+            if ((uint)a >= p.Length || (uint)b >= p.Length || (uint)c >= p.Length) continue;
+            var f = Vector3.Cross(p[b] - p[a], p[c] - p[a]);
+            n[a] += f; n[b] += f; n[c] += f;
+        }
+        for (int v = 0; v < n.Length; v++) n[v] = n[v].LengthSquared() > 1e-20f ? Vector3.Normalize(n[v]) : Vector3.UnitY;
+        return n;
+    }
 
     /// <summary>LOD levels of a shape: the most levels any packed segment has; 1 for plain shapes.</summary>
     public static int LodCount(Mdl3File m, int shape)
@@ -34,6 +50,8 @@ public sealed class Mdl3Mesh
         var sh = m.Shapes[shape];
         reason = "";
         if (Mdl3PackedShape.IsPacked(r, sh)) return DecodePacked(m, sh, lod);
+        if (sh.FvfIndex < 0 && m.Pmsh is { } pmsh && Mdl3Pmsh.MeshIndex(r, sh) is int mi && mi >= 0 && mi < pmsh.Meshes.Count)
+            return DecodePmsh(r, pmsh, pmsh.Meshes[mi], out reason);
         if (sh.VerticesOffset == 0 || sh.TriOffset == 0 || sh.FvfIndex < 0) { reason = "no vertex data in the file"; return null; }
         var fvf = m.Fvfs[sh.FvfIndex];
         var pos = fvf["position"];
@@ -69,6 +87,26 @@ public sealed class Mdl3Mesh
         }
         mesh.Indices = [.. idx];
         return mesh;
+    }
+
+    /// <summary>GT6 PMSH mesh with its data in the MDL3; several data blocks are merged (split or level: open).</summary>
+    static Mdl3Mesh? DecodePmsh(BigEndianReader r, Mdl3Pmsh pmsh, Mdl3PmshMesh mesh, out string reason)
+    {
+        reason = "";
+        if (mesh.Declaration < 0 || mesh.Data.Count == 0 || mesh.Data[0].PackedVertices == 0) { reason = "PMSH data not in the file (body_s)"; return null; }
+        var parts = mesh.Data.Select(d => pmsh.Decode(r, mesh, d)).ToList();
+        if (parts.Count == 1) return parts[0];
+        var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uvs = new List<Vector2>(); var idx = new List<int>();
+        bool hasN = parts.All(p => p.Normals != null), hasUv = parts.All(p => p.Uvs != null);
+        foreach (var p in parts)
+        {
+            int b = pos.Count;
+            pos.AddRange(p.Positions);
+            if (hasN) nrm.AddRange(p.Normals!);
+            if (hasUv) uvs.AddRange(p.Uvs!);
+            idx.AddRange(p.Indices.Select(i => i < 0 ? i : b + i));
+        }
+        return new Mdl3Mesh { Packed = true, Positions = [.. pos], Normals = hasN ? [.. nrm] : null, Uvs = hasUv ? [.. uvs] : null, Indices = [.. idx] };
     }
 
     static Mdl3Mesh DecodePacked(Mdl3File m, Mdl3Shape sh, int lod)

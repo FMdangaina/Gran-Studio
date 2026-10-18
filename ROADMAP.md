@@ -20,13 +20,17 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095 look whole
 - [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
   Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), 5 last LOD levels, segment +08/+0C blocks
-- [ ] 4c.1 Export fixes from `ISSUES.md` (to be checked by the user in Blender): shared decoder `Mdl3Mesh`;
+- [x] 4c.1 Export fixes from `ISSUES.md` (checked by the user in Blender: meshes import correctly; the export format
+  will change when it has to be usable, item 6): shared decoder `Mdl3Mesh`;
   readable object names from the Maya paths (`ShapeNaming`); only the visible models (no shadow / self-shadow / light
   mask copies, `--all-models` for all); one file per LOD level; `gtdev mdl3-gltf` with the node hierarchy.
   `gtdev mdl3-normals`: low LODs reuse the LOD0 normals (agreement 99.5% LOD0 -> 89.7% LOD4 on GT5 race), winding stays
   consistent, so not a decoding error. Open: suspension parts (discs, calipers) have no position in the MDL3
   (op6 = engine matrix slot), segment +08 LOD streams (maybe LOD normals/positions)
-- [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices)
+- [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices). **Decoded** for the data held
+  in the MDL3 (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 interior/wheel/tire/carparts files, 61,397 blocks, 0 positions
+  outside the box, 31 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Left: visual check by the user
+  (`tests\pmsh\demio_wheel`, `demio_interior`), the 31 blocks, GT6 bodies (same format, data in `body_s`: with item 5)
 - [ ] 4e. Check over every car file, 0 failures
 
 ## Next
@@ -34,6 +38,22 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
 5. **GT6 `body_s`** — container known (3d: stream map, bundles, images); left: the shape data in the bundles,
    the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
 6. **Viewer** — Direct3D 11 (Vortice.Windows), read only.
+7. **Materials and textures for display** — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
+   ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
+   external ones (sampler 0x8000 | n, provided by the game):
+   - race numbers / plates (`Decken`, `number_f/r`, rally plaque): GT5 `car\decken` holds 402 TXS3 files (`a.00`...);
+   - meters (`ExtraMeter_meter_0N`, `custom_meter_*`): drawn at run time from `car\meter` (STRB);
+   - paint colour shift (`*_PaintExtraBRDF` reflect/scatter, GT6): the `body_s` `/` sub streams (one per paint colour,
+     `ReflectColorShiftBRDF` / `ScatterColorShiftBRDF` images); the paint colour itself comes from the car data (specdb).
+   GT5 has almost none (50 references, decals); GT6 thousands.
+8. **Car list ("open game folder")** — pick a car by name instead of by id, as in Forza Studio:
+   - GT5: `specdb\GT5_JP3009` (GTDB tables, readable with PDTools.SpecDB, MIT): `VARIATION.ModelCode` = the model folder
+     name (`00010075`; 1017 of 1088 found as strings in `UnistrDB.sdb`), `GENERIC_CAR` label (`rx7_spiritr_a_02`),
+     `CAR_NAME_<language>` (name, grade, short name), maker, year;
+   - GT6: `car\MMMM\NNNN` = the same code (`00010112`); 963 of 1227 codes are also in the GT5 database; the others need
+     `specdb\GT6\<region>\CarName.dat` (`NDB0`, compressed strings) or `DB0106.dat` (encrypted, not in PDTools);
+   - thumbnails: GT5 `car\thumbnail_M` (2110), GT6 `car\thumbnail_S` / `_L` (1293), TXS3 named `<label>_<colour>`;
+   - first a `gtdev` car list (code, label, maker, name, files present), then a window in the viewer (item 6).
 
 ## Later / open questions
 
