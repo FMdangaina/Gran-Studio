@@ -48,4 +48,20 @@ static class Gt6SpecDbDump
         }
         return 0;
     }
+
+    /// <summary>sql &lt;plain.sqlite | DB0106.dat&gt; &lt;query&gt;: one query, tab-separated rows with a header.</summary>
+    public static int Query(string[] args)
+    {
+        if (args.Length < 2) { Console.Error.WriteLine("sql <plain.sqlite | DB0106.dat> <query>"); return 1; }
+        using var spec = args[0].EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ? Gt6SpecDb.Open(args[0]) : null;
+        using var own = spec == null ? new SqliteConnection($"Data Source={args[0]};Mode=ReadOnly") : null;
+        own?.Open();
+        using var c = (spec?.Connection ?? own!).CreateCommand();
+        c.CommandText = string.Join(" ", args[1..]);
+        using var r = c.ExecuteReader();
+        Console.WriteLine(string.Join("\t", Enumerable.Range(0, r.FieldCount).Select(r.GetName)));
+        while (r.Read())
+            Console.WriteLine(string.Join("\t", Enumerable.Range(0, r.FieldCount).Select(i => r.IsDBNull(i) ? "null" : Convert.ToString(r.GetValue(i), System.Globalization.CultureInfo.InvariantCulture))));
+        return 0;
+    }
 }

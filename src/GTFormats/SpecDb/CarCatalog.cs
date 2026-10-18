@@ -18,6 +18,19 @@ public sealed class CarEntry
     public string? Thumbnail;
 }
 
+/// <summary>A model that is not a car body: a car's wheel, a GT6 aftermarket wheel or custom wing part (carparts).</summary>
+public sealed class PartEntry
+{
+    public string Kind = "";            // car wheel, aftermarket wheel, wing part
+    public string Code = "";            // car code, or the carparts file name (he002)
+    public string Name = "";
+    public string Info = "";            // size and spokes of an aftermarket wheel
+    public string File = "";            // the model (hq)
+    public string? RaceFile;            // carparts\race copy (low detail)
+    public string? Thumbnail;
+    public CarEntry? Car;               // for a car's own wheel
+}
+
 /// <summary>
 /// The car list of an extracted game folder (GT5_VOL or GT6_VOL), as in Forza Studio: every model code with its
 /// files, the name, year and database label from the GT5 spec database (`specdb\GT5_JP3009`: VARIATION.ModelCode =
@@ -99,6 +112,65 @@ public static class CarCatalog
     }
 
     static string? Existing(string p) => File.Exists(p) ? p : null;
+
+    /// <summary>The GT6 spec database for a game folder: its own (GT6_VOL), else the one of a GT6 folder next to it.</summary>
+    public static string? FindGt6SpecDb(string root)
+    {
+        root = Path.GetFullPath(root);
+        if (Gt6SpecDb.Find(root) is { } own) return own;
+        var parent = Path.GetDirectoryName(root);
+        return parent == null ? null : Directory.GetDirectories(parent).Select(Gt6SpecDb.Find).FirstOrDefault(f => f != null);
+    }
+
+    /// <summary>
+    /// The wheels and other parts of a game folder, apart from the cars: every car's own wheel files (named after the
+    /// car), and in GT6 the `carparts` models: aftermarket wheels `heNNN` (NNN = WHEEL_EX ID, name and size from the
+    /// database, thumbnail `wheel_thumb\NNN_00`) and the custom wing parts `we` endplate, `wm` mount, `wp` plane, `ws` stay.
+    /// </summary>
+    public static List<PartEntry> ScanParts(string root, List<CarEntry> cars, Gt6SpecDb? db)
+    {
+        root = Path.GetFullPath(root);
+        if (Path.GetFileName(root).Equals("car", StringComparison.OrdinalIgnoreCase)) root = Path.GetDirectoryName(root)!;
+        var list = new List<PartEntry>();
+        foreach (var c in cars)
+            foreach (var w in c.Wheels)
+            {
+                // GT5 wheel\hq\<code>.NN, GT6 car\MMMM\CCCC\<hq|race>\wheel
+                string variant = c.Game == "GT5" ? Path.GetFileName(w).Contains('.') ? "variant " + Path.GetFileName(w).Split('.')[1] : "base" : Path.GetFileName(Path.GetDirectoryName(w))!;
+                list.Add(new PartEntry { Kind = "car wheel", Code = c.Code, Name = $"{(c.Name.Length > 0 ? c.Name : c.Code)} ({variant})", File = w, Thumbnail = c.Thumbnail, Car = c });
+            }
+        string parts = Path.Combine(root, "carparts", "hq");
+        if (!Directory.Exists(parts)) return list;
+        var wheels = db?.AftermarketWheels() ?? [];
+        string thumbs = Path.Combine(root, "carparts", "wheel_thumb");
+        var wing = new Dictionary<string, string> { ["we"] = "wing endplate", ["wm"] = "wing mount", ["wp"] = "wing plane", ["ws"] = "wing stay" };
+        foreach (var f in Directory.GetFiles(parts).Order())
+        {
+            string id = Path.GetFileName(f);
+            var m = Regex.Match(id, @"^(he|we|wm|wp|ws)(\d{3})$");
+            if (!m.Success) continue;
+            int n = int.Parse(m.Groups[2].Value);
+            var e = new PartEntry { Code = id, File = f, RaceFile = Existing(Path.Combine(root, "carparts", "race", id)) };
+            if (m.Groups[1].Value == "he")
+            {
+                e.Kind = "aftermarket wheel";
+                if (wheels.TryGetValue(n, out var w))
+                {
+                    e.Name = w.Name;
+                    e.Info = $"{w.Diameter / 10.0:0.#} inch, {w.Width} mm wide, {w.Spokes} spokes";
+                }
+                else e.Name = $"wheel {n}";
+                e.Thumbnail = Existing(Path.Combine(thumbs, $"{n:D3}_00"));
+            }
+            else
+            {
+                e.Kind = "wing part";
+                e.Name = $"{wing[m.Groups[1].Value]} {n}";
+            }
+            list.Add(e);
+        }
+        return list;
+    }
 
     /// <summary>GT6 names from its own spec database (specdb\GT6\DB0106.dat), empty when missing or unreadable.</summary>
     static Dictionary<string, (string Name, string Label, int Year)> ReadGt6Names(string root)

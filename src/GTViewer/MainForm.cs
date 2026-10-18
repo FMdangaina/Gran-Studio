@@ -19,6 +19,8 @@ public sealed class MainForm : Form
     readonly ToolStripStatusLabel status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly ToolStripMenuItem wireItem = new("&Wireframe") { CheckOnClick = true, ShortcutKeys = Keys.Control | Keys.W };
     readonly ToolStripMenuItem texItem = new("&Textures") { CheckOnClick = true, Checked = true, ShortcutKeys = Keys.Control | Keys.T };
+    readonly ToolStripMenuItem listItem = new("Car &list") { CheckOnClick = true, ShortcutKeys = Keys.Control | Keys.L };
+    readonly SplitContainer outer = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, FixedPanel = FixedPanel.Panel2 };
     ViewerDocument? doc;
     bool filling;
     Point lastMouse;
@@ -28,7 +30,7 @@ public sealed class MainForm : Form
     {
         Text = "GTViewer";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);   // the exe icon (granstudio.ico) on the window too
-        ClientSize = new Size(1400, 860);
+        ClientSize = new Size(1400, 940);
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
         AllowDrop = true;
@@ -56,9 +58,15 @@ public sealed class MainForm : Form
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 400, FixedPanel = FixedPanel.Panel1 };
         split.Panel1.Controls.Add(left);
         split.Panel2.Controls.Add(view);
+        // the car list (File > Open game folder) docks under the tree and the view
+        outer.Panel1.Controls.Add(split);
+        outer.Panel2Collapsed = true;
+        listItem.CheckedChanged += (_, _) => { outer.Panel2Collapsed = !listItem.Checked || carPanel == null; if (!outer.Panel2Collapsed) PlaceListSplitter(); };
+        viewMenu.DropDownItems.Add(new ToolStripSeparator());
+        viewMenu.DropDownItems.Add(listItem);
         var statusStrip = new StatusStrip();
         statusStrip.Items.Add(status);
-        Controls.Add(split);
+        Controls.Add(outer);
         Controls.Add(statusStrip);
         Controls.Add(menu);
         MainMenuStrip = menu;
@@ -76,14 +84,21 @@ public sealed class MainForm : Form
         tree.NodeMouseDoubleClick += (_, _) => FrameSelected();
         KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.F && !tree.Focused) { FrameAll(); e.Handled = true; }
-            if (e.KeyCode == Keys.S && !tree.Focused) { FrameSelected(); e.Handled = true; }
+            if (tree.Focused || carPanel?.ContainsFocus == true || e.Modifiers != Keys.None) return;   // typing in the search box
+            if (e.KeyCode == Keys.F) { FrameAll(); e.Handled = true; }
+            if (e.KeyCode == Keys.S) { FrameSelected(); e.Handled = true; }
         };
         DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] f && f.Length > 0) Open(f[0]); };
         // splitter positions only hold once the window has its size
         Load += (_, _) => { split.SplitterDistance = 420; left.SplitterDistance = Math.Max(200, left.Height - 260); };
-        Shown += (_, _) => { if (file != null) Open(file); else status.Text = "File > Open game folder (Ctrl+G) to pick a car by name, File > Open file (Ctrl+O), or drop a model file here."; };
+        Shown += (_, _) =>
+        {
+            if (file != null) Open(file);
+            else status.Text = "File > Open game folder (Ctrl+G) to pick a car by name, File > Open file (Ctrl+O), or drop a model file here.";
+            // the game folder of the last session comes back with its car list
+            if (!NoAutoLoad && LastGameFolder() is { } last && Directory.Exists(Path.Combine(last, "car"))) _ = LoadGameFolder(last);
+        };
         FormClosed += (_, _) => { doc?.Dispose(); renderer.Dispose(); };
     }
 
@@ -95,12 +110,16 @@ public sealed class MainForm : Form
     }
 
     static readonly string SettingsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GTViewer", "last_game_folder.txt");
-    CarListForm? carList;
+    CarListPanel? carPanel;
+
+    static string? LastGameFolder()
+    {
+        try { return File.Exists(SettingsFile) ? File.ReadAllText(SettingsFile).Trim() : null; } catch { return null; }
+    }
 
     void OpenGameFolder()
     {
-        string last = "";
-        try { if (File.Exists(SettingsFile)) last = File.ReadAllText(SettingsFile).Trim(); } catch { }
+        string last = LastGameFolder() ?? "";
         using var dlg = new FolderBrowserDialog
         {
             Description = "Pick the extracted game folder (GT5_VOL or GT6_VOL)",
@@ -109,10 +128,37 @@ public sealed class MainForm : Form
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try { Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!); File.WriteAllText(SettingsFile, dlg.SelectedPath); } catch { }
-        carList?.Close();
-        carList = new CarListForm(dlg.SelectedPath, (file, title) => Open(file, title));
-        carList.Show(this);
+        _ = LoadGameFolder(dlg.SelectedPath);
     }
+
+    /// <summary>For --ui-shot: no game folder from the last session.</summary>
+    public bool NoAutoLoad;
+
+    /// <summary>--ui-shot: the window with a game folder's list, a search and its first item selected, as a PNG.</summary>
+    public async Task ShotUi(string root, int tab, string search, string png)
+    {
+        await LoadGameFolder(root);
+        carPanel!.Select(tab, search);
+        Application.DoEvents();
+        using var bmp = new Bitmap(Width, Height);
+        DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+        bmp.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    async Task LoadGameFolder(string root)
+    {
+        carPanel?.Dispose();
+        carPanel = new CarListPanel(root, (file, title) => Open(file, title)) { Dock = DockStyle.Fill };
+        outer.Panel2.Controls.Add(carPanel);
+        listItem.Checked = true;
+        outer.Panel2Collapsed = false;
+        PlaceListSplitter();
+        try { await carPanel.LoadAsync(); }
+        catch (Exception e) { MessageBox.Show(this, e.Message, "Cars", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+    }
+
+    /// <summary>The car list takes the lower third of the window (at least 260 px).</summary>
+    void PlaceListSplitter() => outer.SplitterDistance = Math.Max(200, outer.Height - Math.Max(260, outer.Height / 3));
 
     void Open(string path, string? title = null)
     {

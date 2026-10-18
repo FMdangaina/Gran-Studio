@@ -31,12 +31,20 @@ Tests and dumps: `tests\<topic>` (not committed).
    `Gt6SpecDb` decrypts it to `%LOCALAPPDATA%\GTViewer\specdb` and joins GENERIC_CAR.ModelCode (maker * 10000 + car =
    the model folders) with CAR_NAME_ALPHABET: **1227 of 1227 GT6 cars named, all with thumbnail**. Waiting for the
    user to close it.
+   2026-10-18 (user's request with a screenshot): the list is now **docked under the 3D view** (`CarListPanel`, View >
+   Car list Ctrl+L, the last game folder comes back at start) with tabs **Cars / Wheels / Wing parts** (wheels apart
+   from the cars: each car's wheels + the 82 GT6 aftermarket wheels by name, `carparts`), and the selected car shows a
+   **sheet from the GT6 database** (maker, country, price, PP, engine, power, torque, red line, drive, weight, size,
+   tyres, colours; GT5 cars use the GT6 row, 1064 / 1088). Fixed: GT6 names were shown as "(guessed)". UI checked
+   off screen with `GTViewer --ui-shot <root> <tab> <search> <out.png>`. **To check by the user.**
 9. **Car data from the spec databases** (proposal) — the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
    tables, `gtdev gt6-specdb`): engine (power, torque curve torqueA-X over rpmA-X, rev limit, sound), chassis (mass,
    size, weight split, cd/cl, ride height), gears and final drive, drivetrain, suspension (springs, dampers, camber,
    toe, anti-roll), brakes, tyres, colours (VARIATION: names per paint = the `body_s` colour slots of item 5a), custom
    parts (CAR_CUSTOM_INFO bits = the custom_* groups of item 5b). Steps:
-   - a. a car sheet in the viewer (and `gtdev`) from DEFAULT_PARTS -> part tables, with units checked;
+   - a. a car sheet in the viewer (and `gtdev`) from DEFAULT_PARTS -> part tables, with units checked (first part done
+     with item 8: dealer sheet + engine curve + chassis size + tyres, units in docs/specdb.md; left: gears, suspension,
+     brakes, aero, tyres compounds);
    - b. same sheet for GT5 (GTDB column layouts from PDTools' table mappings);
    - c. export as a neutral file (JSON / CSV) that Forza Studio can read: mapping GT fields -> FM4 gamedb
      (Data_Car, Data_Engine, torque curve, gears...), unit conversions, what has no equivalent. The import itself

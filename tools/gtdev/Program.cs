@@ -28,6 +28,8 @@ if (args.Length == 0)
     Console.WriteLine("  gt5-gt6 <gt5 root> <gt6 root> <out.txt>   item 5c: the same car code in GT5 and GT6");
     Console.WriteLine("  mdl3-scene <file> [out.txt] | <files.tsv> <groupRegex> <out.txt>   the viewer's scene tree, switches, LOD levels");
     Console.WriteLine("  gt6-specdb <DB0106.dat> <out.sqlite> [report.txt] [--menu]   decrypt a GT6 SQLite database, list its tables");
+    Console.WriteLine("  sql <plain.sqlite | DB0106.dat> <query>   run one SELECT on a GT6 database (a .dat is decrypted to the viewer's cache)");
+    Console.WriteLine("  car-list <root> <out.tsv> | --sheet <root> <code|parts>   the viewer's car list, car sheet, wheels and parts");
     return 1;
 }
 
@@ -65,6 +67,7 @@ return args[0] switch
     "mdl3-scene" => Mdl3SceneDump.Run(args[1..]),
     "specdb-dump" => SpecDbDump.Run(args[1..]),
     "gt6-specdb" => Gt6SpecDbDump.Run(args[1..]),
+    "sql" => Gt6SpecDbDump.Query(args[1..]),
     "car-list" => CarList.Run(args[1..]),
     "mdl3-diffuse" => Mdl3Diffuse.Run(args[1..]),
     "shds-vp" => ShdsVp.Run(args[1..]),

@@ -14,6 +14,26 @@ static class CarList
             Console.WriteLine($"{w}x{h} -> {args[2]}");
             return 0;
         }
+        if (args[0] == "--sheet")
+        {
+            // car-list --sheet <root> <code|parts>: the viewer's car sheet of one code, or the parts list counts
+            using var db = CarCatalog.FindGt6SpecDb(args[1]) is { } f ? Gt6SpecDb.Open(f) : null;
+            if (args[2] == "parts")
+            {
+                var parts = CarCatalog.ScanParts(args[1], CarCatalog.Scan(args[1]), db);
+                foreach (var g in parts.GroupBy(p => p.Kind)) Console.WriteLine($"{g.Key}: {g.Count()}, {g.Count(p => p.Thumbnail != null)} with thumbnail, e.g. {string.Join(" | ", g.Take(3).Select(p => $"{p.Code} {p.Name} {p.Info}"))}");
+                return 0;
+            }
+            if (args[2] == "coverage")
+            {
+                var cars = CarCatalog.Scan(args[1]);
+                int sheets = cars.Count(e => db?.CarSheet(long.Parse(e.Code), e.Label.Length > 0 ? e.Label : null) != null);
+                Console.WriteLine($"{cars.Count} cars, {sheets} with a GT6 database sheet");
+                return 0;
+            }
+            foreach (var (k, v) in db?.CarSheet(long.Parse(args[2])) ?? [("-", "not in the GT6 database")]) Console.WriteLine($"{k,-9} {v}");
+            return 0;
+        }
         var list = CarCatalog.Scan(args[0], Console.WriteLine);
         using (var w = new StreamWriter(args[1]))
         {
