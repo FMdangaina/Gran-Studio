@@ -43,7 +43,28 @@ public sealed class Mdl3File
         }
     }
 
-    public static Mdl3File Load(string path) => new(File.ReadAllBytes(path));
+    public static Mdl3File Load(string path) => new(File.ReadAllBytes(path)) { SourcePath = path };
+
+    /// <summary>Path the file was loaded from (to find the GT6 <c>body_s</c> next to <c>body</c>).</summary>
+    public string? SourcePath { get; private init; }
+
+    Mdl3BodyS? bodyS;
+    bool bodySRead;
+
+    /// <summary>GT6 car body shape data in <c>&lt;file&gt;_s</c>, null when there is no stream map or no such file.</summary>
+    public Mdl3BodyS? BodyS
+    {
+        get
+        {
+            if (!bodySRead)
+            {
+                bodySRead = true;
+                if (SourcePath != null && File.Exists(SourcePath + "_s") && Mdl3StreamMap.Read(Data) is { } map)
+                    bodyS = new Mdl3BodyS(map, File.ReadAllBytes(SourcePath + "_s"));
+            }
+            return bodyS;
+        }
+    }
 
     Mdl3Pmsh? pmsh;
     bool pmshRead;

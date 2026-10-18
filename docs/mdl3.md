@@ -422,16 +422,21 @@ In GT6 **car bodies** the smooth data offsets are 0 (the data is in `body_s`); i
 
 **Decoding (item 4d)** — `Mdl3Pmsh.Decode`, `Mdl3PmshCommands`, checked by `gtdev pmsh-check` on every GT6 interior,
 wheel, tire and carparts file with the data in the MDL3 (4717 files, 61,397 data blocks, 53.6 M vertices, 82.5 M triangles):
-0 exceptions, 0 positions outside the block box, 99.44% of triangles agree with the stored normals, 0.126% directed
+0 exceptions, 0 positions outside the block box, 99.73% of triangles agree with the stored normals, 0.126% directed
 edges used twice; 3 interior blocks leave some vertices unused (open). Visual check: Demio wheel (`gtdev mdl3-preview`)
 and tire t0256 whole; Demio interior checked by the user in ZModeler.
 - Shape packed ref +34 = PMSH mesh index (also in interiors/wheels: the 4 wheels share the same data blocks).
 - **Packed elements**: one bit array per layout, V values each, MSB first, layouts in declaration order;
-  value = (raw / (2^(bits-1) - 1) + 2) x scale + offset (PDTools). The CMP normal never has a layout; colorSet1 and
-  colorSet2 together take one; colorSet1 alone has one only with data flag 0x40. Position is always the first element.
+  value = (raw / (2^(bits-1) - 1) + 2) x scale + offset (PDTools). The packed CMP normal has no layout of its own
+  (see Normals); colorSet1 and colorSet2 together take one; colorSet1 alone has one only with data flag 0x40;
+  map34 shares the 4-component layout of a 2-component map12 (counted on map12, map34 = its 3rd and 4th components).
+  Position is always the first element. A 3-component colour layout has the alpha in offset[3] (1).
 - **Raw elements**: V records of the raw stride at +0C, element at its output offset (normal CMP, tangent, colours, UVs).
-- **Normals**: raw CMP element, else the 4-byte stream of flag 0x80 (+10 after +28 quadwords and the 1-byte stream of
-  flag 0x40), else not stored (12,554 blocks: the SmoothMesh job computes them; we use area-weighted face normals).
+- **Normals**: raw CMP element; else, with a packed CMP normal, the **4th component of the position layout**
+  (32 bits, scale 1, offset 0: the raw bits are the CMP word); else the 4-byte stream of flag 0x80 (+10 after +28
+  quadwords and the 1-byte stream of flag 0x40); else not stored (declarations without a normal: we use area-weighted
+  face normals). With colorSet1 + colorSet2 the 4-byte stream is not a normal (same word on very different normals):
+  reading it as CMP gave 95% non-unit normals on GT6 bodies before the position W rule.
 - **Block box** (mesh +14, 0x60 per block): two groups of 4 corners stored as x[4], y[4], z[4] (oriented box).
 - **Commands** (+18, MSB first, 5-bit opcodes, operand widths from PDTools): the job keeps a 2^idxBits vertex ring;
   `op5 slot, groups (first vertex, count - 1)` loads mesh vertices into consecutive slots; `op1 n` draws 4 n
@@ -444,8 +449,24 @@ and tire t0256 whole; Demio interior checked by the user in ZModeler.
   d == c or d == a = triangle). The outer list of SmoothMesh blocks (op7/9/10/11/12/21/22/23) holds the
   subdivision patch data (not needed for the cage). Every vertex used and the index data consumed up to its last
   quadword on all but 3 blocks.
-- Open: the 1-byte stream (flag 0x40), +08 10-byte entries, output count > V (vertices added by the job),
-  several data blocks per mesh (merged for now), GT6 bodies (data in `body_s`, item 5).
+- Open: the 1-byte stream (flag 0x40), the 4-byte stream when the normal is in the position W, +08 10-byte entries,
+  output count > V (vertices added by the job), several data blocks per mesh (merged for now), data flag 0x01
+  (layout count 1 = position only, positions outside the box: 11 race blocks).
+
+**GT6 car bodies** (`Mdl3BodyS`): the shape data is in the `body_s` bundles (see the stream map below). Each bundle's
+shape table record (0x20) starts with u32 shape index; the first bundle holding a shape is used.
+- PMSH shape: +04 0, +08 0, +0C box (8 corners x, y, z, 0x60), +10 0x10 bytes (the mesh +08 records), +14 offset of
+  the smooth mesh data records (0x30 each, same layout as above, every offset relative to the bundle), +18 the box
+  again as x[4] y[4] z[4], +1C data record count.
+- Plain shape (e.g. `GTBE_OCCLUSION`): +04 vertices, +08 triangles (offsets in the bundle), +0C box; the vertex
+  format, counts and triangle length are the MDL3 shape's.
+- `gtdev pmsh-check` on all 2454 GT6 car bodies (hq + race): 267,778 data blocks, 142 M vertices, 206 M triangles,
+  0 exceptions, 99.47% of triangles agree with the normals, 0.04% normals off unit length, 0.210% directed edges used
+  twice. Failures: 14 blocks with unused vertices, 11 flag 0x01 blocks (layout count 1, positions outside the box).
+- Interiors/wheels/tires/carparts with the position W rule: 99.73% agreement (was 99.44%), 6805 blocks without a
+  stored normal (was 12,554).
+- Demio (car\0001\0112\hq\body): 200 of 200 exported shapes, 281,093 triangles; the thin line above the windscreen
+  is the real roof antenna.
 
 **Packed mesh keys** are not mesh names: each is (shader family name, material data +04 index) of an existing material data.
 
@@ -500,8 +521,8 @@ Differences and open points we found:
 
 - GT5 packed geometry: decoded (above). Open: segment +08 extra streams (geomorph?) and +0C block, H +0E, L flags,
   M Y, position format +08..+0B and +2E, the 0x40 record floats, p1/p2/p4/p5 tables (their link to p3), the shape +26 differences.
-- GT6 PMSH data (located and sized exactly, not decoded): item 4d.
-- GT6 `body_s` chunks (stream map 0xDC) and where GT6 image pixels are: items 3 and 5.
+- GT6 PMSH data: decoded (above). Open: 1-byte stream, +08 entries, flag 0x01, output count > V.
+- GT6 `body_s`: shape records decoded (above); the `/` sub streams and `custom_*` groups: item 5.
 - Small open fields (data is fully located, meaning unknown): material block byte +04 (no match with any count),
   0x78 n, 0xB0 +28..+2E, animation row +06, VM context +0A, header 0x7C, the u16s of the pass and of the SHDS +38/+3C records,
   FP header block and VP/FP microcode contents (RSX programs).

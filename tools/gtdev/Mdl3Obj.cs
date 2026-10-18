@@ -11,6 +11,13 @@ using GTFormats.Txs3;
 /// </summary>
 static class Mdl3Obj
 {
+    static string Box(System.Numerics.Vector3[] p)
+    {
+        if (p.Length == 0) return "-";
+        var lo = p.Aggregate(System.Numerics.Vector3.Min); var hi = p.Aggregate(System.Numerics.Vector3.Max);
+        return string.Create(CultureInfo.InvariantCulture, $"{lo.X:0.000},{lo.Y:0.000},{lo.Z:0.000} .. {hi.X:0.000},{hi.Y:0.000},{hi.Z:0.000}");
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length < 2)
@@ -92,7 +99,7 @@ static class Mdl3Obj
                 continue;
             }
             log?.AppendLine($"{s,4} {(mesh.Packed ? "packed" : "plain ")} v={mesh.Positions.Length,6} tris={mesh.Indices.Length / 3,6} (+26 {sh.TriCount,6}) " +
-                            $"n={(mesh.Normals != null ? "y" : "-")} uv={(mesh.Uvs != null ? "y" : "-")}  {ShapeNaming.Short(m, s)}  {full}");
+                            $"n={(mesh.Normals != null ? "y" : "-")} uv={(mesh.Uvs != null ? "y" : "-")} box {Box(mesh.Positions)}  {ShapeNaming.Short(m, s)}  {full}");
             // OBJ has no parent links: the group path (meaningful Maya groups above the shape) goes in a g line
             var raw = full.Split('|', StringSplitOptions.RemoveEmptyEntries);
             var groupPath = ShapeNaming.Nodes(string.Join('|', raw.Take(Math.Max(1, raw.Length - 2))));

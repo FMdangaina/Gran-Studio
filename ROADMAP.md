@@ -31,12 +31,17 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   in the MDL3 (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 interior/wheel/tire/carparts files, 61,397 blocks, 0 positions
   outside the box, 3 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Demio interior OK for the
   user (ZModeler); wheel was wrong (double-buffered vertex loads), fixed and checked by the user (ZModeler: OK).
-  Left: the 3 blocks, GT6 bodies (same format, data in `body_s`: with item 5)
+  **GT6 bodies** decoded from the `body_s` bundles (`Mdl3BodyS`: PMSH and plain shape records): all 2454 bodies,
+  267,778 blocks, 0 exceptions, 99.47% triangles agree with the normals. Normals of packed CMP declarations are the
+  32-bit W of the position layout (was read from the 4-byte stream: 91% agreement); map34 shares map12's layout.
+  Demio body: 200/200 shapes, whole in the preview.
+  Left: user check of the Demio body in ZModeler (`tests\pmsh\demio_body`), 14 body + 3 interior blocks with unused
+  vertices, 11 flag 0x01 race blocks (position only, outside the box)
 - [ ] 4e. Check over every car file, 0 failures
 
 ## Next
 
-5. **GT6 `body_s`** — container known (3d: stream map, bundles, images); left: the shape data in the bundles,
+5. **GT6 `body_s`** — container known (3d: stream map, bundles, images), shape data decoded (4d); left:
    the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
 6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model
    hierarchy (models, Maya groups, shapes, switch variants, LODs) next to the 3D view, so the user understands how a

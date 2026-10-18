@@ -41,6 +41,7 @@ return args[0] switch
     "pmsh-probe" => PmshProbe.Run(args[1..]),
     "pmsh-survey" => PmshSurvey.Run(args[1..]),
     "pmsh-check" => PmshCheck.Run(args[1..]),
+    "bodys-shapes" => BodySShapes.Run(args[1..]),
     "mdl3-packed" => Mdl3PackedCheck.Run(args[1..]),
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),

@@ -150,11 +150,13 @@ public sealed class Mdl3Pmsh
 
     /// <summary>
     /// The CMP normal never has a bit layout; colorSet1 and colorSet2 together take one (counted on colorSet2);
-    /// colorSet1 alone has one only with flag 0x40.
+    /// colorSet1 alone has one only with flag 0x40; map34 shares the layout of a 2-component map12 (4 components,
+    /// counted on map12).
     /// </summary>
     static bool HasNoLayout(Mdl3PmshElement e, int flags, Mdl3PmshDeclaration decl) =>
         e.Type == RsxVertexType.CMP ||
-        (e.Name == "colorSet1" && ((flags & 0x40) == 0 || decl.Packed.Any(x => x.Name == "colorSet2")));
+        (e.Name == "colorSet1" && ((flags & 0x40) == 0 || decl.Packed.Any(x => x.Name == "colorSet2"))) ||
+        (e.Name == "map34" && decl.Packed.Any(x => x.Name == "map12" && x.Count == 2));
 
     /// <summary>
     /// Decode one data block held in the MDL3 (interiors, wheels, tires): packed elements are bit arrays, one per
@@ -171,11 +173,14 @@ public sealed class Mdl3Pmsh
         var packed = new Dictionary<string, System.Numerics.Vector4[]>();
         var map = PackedLayouts(decl, layouts, d.Flags);
         long at = d.PackedVertices;
+        uint[]? positionW = null;   // 32-bit 4th component of the position layout = the CMP normal word
         for (int i = 0; i < decl.Packed.Count; i++)
         {
             var l = map[i];
             if (l == null) continue;
             var values = new System.Numerics.Vector4[V];
+            bool keepW = decl.Packed[i].Name == "position" && l.Bits[3] == 32;
+            if (keepW) positionW = new uint[V];
             for (int v = 0; v < V; v++)
             {
                 long bit = (long)v * l.TotalBits;
@@ -186,7 +191,8 @@ public sealed class Mdl3Pmsh
                     uint raw = 0;
                     for (int b = 0; b < l.Bits[c]; b++, bit++)
                         raw = (raw << 1) | (uint)((r.Data[at + (bit >> 3)] >> (7 - (int)(bit & 7))) & 1);
-                    f[c] = (raw / (float)((1 << (l.Bits[c] - 1)) - 1) + 2f) * l.Scale[c] + l.Offset[c];
+                    if (c == 3 && keepW) positionW![v] = raw;
+                    f[c] = (raw / (float)((1L << (l.Bits[c] - 1)) - 1) + 2f) * l.Scale[c] + l.Offset[c];
                 }
                 values[v] = new System.Numerics.Vector4(f[0], f[1], f[2], f[3]);
             }
@@ -206,14 +212,17 @@ public sealed class Mdl3Pmsh
 
         // normals
         if (decl.Raw.FirstOrDefault(e => e.Name == "normal") is { } rn && d.RawVertices != 0)
-            result.Normals = [.. Enumerable.Range(0, V).Select(v => RawVec(rn, v))];
+        { result.Normals = [.. Enumerable.Range(0, V).Select(v => RawVec(rn, v))]; result.NormalSource = $"raw {rn.Type}"; }
+        else if (positionW != null && decl.Packed.Any(e => e.Name == "normal" && e.Type == RsxVertexType.CMP))
+        { result.Normals = [.. positionW.Select(Mdl3Mesh.Cmp)]; result.NormalSource = "position w"; }
         else if ((d.Flags & 0x80) != 0 && d.Streams10 != 0)
         {
             int s = (int)d.Streams10 + d.Quadwords28 * 16 + ((d.Flags & 0x40) != 0 ? (V + 15) & ~15 : 0);
             result.Normals = [.. Enumerable.Range(0, V).Select(v => Mdl3Mesh.Cmp(r.U32(s + v * 4)))];
+            result.NormalSource = "stream 0x80";
         }
         else if (packed.TryGetValue("normal", out var pn))
-            result.Normals = [.. pn.Select(x => new System.Numerics.Vector3(x.X, x.Y, x.Z))];
+        { result.Normals = [.. pn.Select(x => new System.Numerics.Vector3(x.X, x.Y, x.Z))]; result.NormalSource = "packed layout"; }
 
         // UVs: map12 / map1, raw or packed
         foreach (var name in new[] { "map12", "map1" })
@@ -226,7 +235,7 @@ public sealed class Mdl3Pmsh
             if (packed.TryGetValue(name, out var pu)) { result.Uvs = [.. pu.Select(x => new System.Numerics.Vector2(x.X, x.Y))]; break; }
         }
         result.Indices = Mdl3PmshCommands.Triangles(r.Data, d, out _, out _, Entries1C);
-        if (result.Normals == null) { result.Normals = Mdl3Mesh.FaceNormals(result.Positions, result.Indices); result.NormalsComputed = true; }
+        if (result.Normals == null) { result.Normals = Mdl3Mesh.FaceNormals(result.Positions, result.Indices); result.NormalsComputed = true; result.NormalSource = "computed"; }
         return result;
     }
 

@@ -3,7 +3,7 @@ using System.Numerics;
 using GTFormats.Mdl3;
 
 /// <summary>
-/// pmsh-probe &lt;file&gt; &lt;mesh&gt;: research on one PMSH mesh (data in the MDL3): packed positions with the PDTools
+/// pmsh-probe &lt;file&gt; &lt;mesh|sShape&gt; [block]: research on one PMSH data block (in the MDL3 or body_s): packed positions with the PDTools
 /// dequantization (raw / (2^(bits-1)-1) + 2) * scale + offset, MSB- and LSB-first, against the mesh bbox; the first
 /// raw vertices; the index and command data as hex and as fixed-width values.
 /// </summary>
@@ -11,12 +11,24 @@ static class PmshProbe
 {
     public static int Run(string[] args)
     {
-        if (args.Length < 2) { Console.Error.WriteLine("pmsh-probe <file> <mesh>"); return 1; }
+        if (args.Length < 2) { Console.Error.WriteLine("pmsh-probe <file> <mesh> [block]"); return 1; }
         var m = Mdl3File.Load(args[0]);
         var r = m.Data;
         var p = Mdl3Pmsh.Read(r)!;
-        var me = p.Meshes[int.Parse(args[1])];
-        var d = me.Data[0];
+        // mesh index, or s<shape> for the mesh of a shape
+        int mi = args[1].StartsWith('s') ? Mdl3Pmsh.MeshIndex(r, m.Shapes[int.Parse(args[1][1..])]) : int.Parse(args[1]), block = args.Length > 2 ? int.Parse(args[2]) : 0;
+        var me = p.Meshes[mi];
+        var blocks = me.Data;
+        if (blocks.Count == 0 || blocks[0].PackedVertices == 0)
+        {
+            // car body: data in the body_s bundle of the shape that uses the mesh
+            int shape = Enumerable.Range(0, m.Shapes.Count).First(s => Mdl3Pmsh.MeshIndex(r, m.Shapes[s]) == mi);
+            var sd = m.BodyS!.Shapes[shape];
+            r = sd.Bundle.R;
+            blocks = m.BodyS.Data(shape);
+            Console.WriteLine($"shape {shape}: data in body_s {sd.Where}, {blocks.Count} blocks");
+        }
+        var d = blocks[block];
         var decl = p.Declarations[me.Declaration];
         var layouts = p.Layouts[me.LayoutArray];
         var ci = CultureInfo.InvariantCulture;
@@ -27,6 +39,9 @@ static class PmshProbe
             var b = me.BBoxes[0];
             Console.WriteLine(string.Create(ci, $"bbox min {b.Aggregate(Vector3.Min)} max {b.Aggregate(Vector3.Max)}"));
         }
+        Console.WriteLine($"mesh {mi}: decl {me.Declaration} packed [{string.Join(' ', decl.Packed.Select(e => $"{e.Name}:{e.Type}x{e.Count}"))}] raw [{string.Join(' ', decl.Raw.Select(e => $"{e.Name}:{e.Type}x{e.Count}@{e.OutputOffset}"))}] raw stride {decl.RawStride}");
+        foreach (var l in layouts)
+            Console.WriteLine(string.Create(ci, $"  layout: total {l.TotalBits} bits {string.Join(',', l.Bits)} scale {string.Join(' ', l.Scale)} offset {string.Join(' ', l.Offset)}"));
         int at = (int)d.PackedVertices;
         for (int li = 0; li < layouts.Count && li < decl.Packed.Count; li++)
         {
@@ -46,6 +61,28 @@ static class PmshProbe
         }
         Console.WriteLine($"raw vertices @{d.RawVertices:X} stride {decl.RawStride}: " + string.Join(" | ", Enumerable.Range(0, 3).Select(v =>
             string.Join(' ', Enumerable.Range(0, decl.RawStride).Select(k => r.U8((int)d.RawVertices + v * decl.RawStride + k).ToString("X2"))))));
+        if (d.Streams10 != 0)
+        {
+            // +10 area: +28 quadwords, 1-byte stream (0x40), 4-byte stream (0x80); share of unit-length CMP values per start
+            int size = d.Quadwords28 * 16 + ((d.Flags & 0x40) != 0 ? (V + 15) & ~15 : 0) + ((d.Flags & 0x80) != 0 ? (V * 4 + 15) & ~15 : 0);
+            Console.WriteLine($"+10 @{d.Streams10:X}: +28 {d.Quadwords28} quadwords, area {size} bytes, next block +14 @{d.Indices:X} (gap {d.Indices - d.Streams10})");
+            for (int s = 0; s + 4 <= Math.Max(size, (int)(d.Indices - d.Streams10)); s += 16)
+            {
+                int n = Math.Min(V, ((int)(d.Indices - d.Streams10) - s) / 4), unit = 0;
+                for (int v = 0; v < n; v++) if (MathF.Abs(GTFormats.Mdl3.Mdl3Mesh.Cmp(r.U32((int)d.Streams10 + s + v * 4)).Length() - 1) < 0.02f) unit++;
+                if (n > 0 && unit > n / 2) Console.WriteLine($"   CMP from +{s}: {unit} of {n} unit length");
+            }
+            Console.WriteLine("   first bytes: " + string.Join(' ', Enumerable.Range(0, 64).Select(k => r.U8((int)d.Streams10 + k).ToString("X2"))));
+            if ((d.Flags & 0x80) != 0)
+            {
+                // 4-byte stream words next to the face normals of the same vertex (to find the encoding)
+                var dm = p.Decode(r, me, d);
+                var fnorm = GTFormats.Mdl3.Mdl3Mesh.FaceNormals(dm.Positions, dm.Indices);
+                int s4 = (int)d.Streams10 + d.Quadwords28 * 16 + ((d.Flags & 0x40) != 0 ? (V + 15) & ~15 : 0);
+                for (int v = 0; v < Math.Min(V, 24); v++)
+                    Console.WriteLine(string.Create(ci, $"   v{v,-4} {r.U32(s4 + v * 4):X8}  face normal {fnorm[v].X,7:F3} {fnorm[v].Y,7:F3} {fnorm[v].Z,7:F3}  decoded ({dm.NormalSource}) {dm.Normals![v].X,7:F3} {dm.Normals[v].Y,7:F3} {dm.Normals[v].Z,7:F3}"));
+            }
+        }
         Dump("indices", r, (int)d.Indices, d.IndexQuadwords * 16, d.IndexBits, V);
         Dump("commands", r, (int)d.Commands, d.CommandQuadwords * 16, 0, V);
         Console.WriteLine("   decoded: " + string.Join(' ', Mdl3PmshCommands.Decode(r.Data, (int)d.Commands, d.CommandQuadwords * 16, d.IndexBits, p.Entries1C)));
@@ -77,6 +114,14 @@ static class PmshProbe
                     // padding triangles were dropped in tri: count only what is there
                     while (count < n && t < lens.Count) { if (lens[t] > 4 * med) longOnes++; t++; count++; }
                     Console.WriteLine($"   batch {batch++} op{c.Opcode}({c.Operands[0]}) tris {first}..{t - 1}: long {longOnes}");
+                }
+                // the longest triangles, with their vertices
+                int k = 0;
+                var valid = Enumerable.Range(0, tri.Length / 3).Where(i => tri[i * 3] >= 0 && tri[i * 3 + 1] >= 0 && tri[i * 3 + 2] >= 0).ToList();
+                foreach (var (len, i) in lens.Select((l, j) => (l, valid[j])).OrderByDescending(x => x.l).Take(6))
+                {
+                    string corners = string.Join(" | ", Enumerable.Range(0, 3).Select(e => P[tri[i * 3 + e]].ToString("F3", ci)));
+                    Console.WriteLine(string.Create(ci, $"   long #{k++}: tri {i} edge {len:F3} (median {med:F4}) v {tri[i * 3]} {tri[i * 3 + 1]} {tri[i * 3 + 2]}: {corners}"));
                 }
             }
         }

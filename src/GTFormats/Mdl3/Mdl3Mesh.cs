@@ -15,6 +15,7 @@ public sealed class Mdl3Mesh
     public int[] Indices = [];
     public bool Packed;
     public bool NormalsComputed;   // not stored in the file (GT6 SmoothMesh data): area-weighted face normals
+    public string? NormalSource;   // GT6 PMSH: where the normals came from (raw element, stream 0x80, packed layout, computed)
 
     /// <summary>Area-weighted vertex normals from the triangles (unit length; vertices without triangles get +Y).</summary>
     public static Vector3[] FaceNormals(Vector3[] p, int[] idx)
@@ -51,8 +52,17 @@ public sealed class Mdl3Mesh
         reason = "";
         if (Mdl3PackedShape.IsPacked(r, sh)) return DecodePacked(m, sh, lod);
         if (sh.FvfIndex < 0 && m.Pmsh is { } pmsh && Mdl3Pmsh.MeshIndex(r, sh) is int mi && mi >= 0 && mi < pmsh.Meshes.Count)
-            return DecodePmsh(r, pmsh, pmsh.Meshes[mi], out reason);
-        if (sh.VerticesOffset == 0 || sh.TriOffset == 0 || sh.FvfIndex < 0) { reason = "no vertex data in the file"; return null; }
+            return DecodePmsh(m, shape, pmsh, pmsh.Meshes[mi], out reason);
+        if (sh.FvfIndex < 0) { reason = "no vertex format"; return null; }
+        long vertsAt = sh.VerticesOffset, trisAt = sh.TriOffset;
+        if (vertsAt == 0 && sh.VertexCount > 0 && m.BodyS?.Shapes.TryGetValue(shape, out var sd) == true)
+        {
+            // GT6 body: plain shape data in its body_s bundle, record +04 vertices, +08 triangles, +0C box
+            r = sd!.Bundle.R;
+            vertsAt = r.U32(sd.Record + 4);
+            trisAt = r.U32(sd.Record + 8);
+        }
+        if (vertsAt == 0 || trisAt == 0) { reason = "no vertex data in the file"; return null; }
         var fvf = m.Fvfs[sh.FvfIndex];
         var pos = fvf["position"];
         if (pos is null) { reason = "no position"; return null; }
@@ -62,39 +72,50 @@ public sealed class Mdl3Mesh
         var mesh = new Mdl3Mesh { Positions = new Vector3[n] };
         for (int v = 0; v < n; v++)
         {
-            int at = (int)(sh.VerticesOffset + fvf.ElementOffset(pos, v));
+            int at = (int)(vertsAt + fvf.ElementOffset(pos, v));
             mesh.Positions[v] = new Vector3(r.F32(at), r.F32(at + 4), r.F32(at + 8));
         }
         if (fvf["normal"] is { Type: RsxVertexType.CMP } nrm)
         {
             mesh.Normals = new Vector3[n];
-            for (int v = 0; v < n; v++) mesh.Normals[v] = Cmp(r.U32((int)(sh.VerticesOffset + fvf.ElementOffset(nrm, v))));
+            for (int v = 0; v < n; v++) mesh.Normals[v] = Cmp(r.U32((int)(vertsAt + fvf.ElementOffset(nrm, v))));
         }
         if ((fvf["map1"] ?? fvf["map12"]) is { } uv)
         {
             mesh.Uvs = new Vector2[n];
             for (int v = 0; v < n; v++)
             {
-                int at = (int)(sh.VerticesOffset + fvf.ElementOffset(uv, v));
+                int at = (int)(vertsAt + fvf.ElementOffset(uv, v));
                 mesh.Uvs[v] = new Vector2(Comp(r, uv, at, 0), Comp(r, uv, at, 1));
             }
         }
         var idx = new List<int>((int)sh.TriLength);
         for (int i = 0; i + 2 < sh.TriLength; i += 3)
         {
-            int a = r.U16((int)sh.TriOffset + i * 2), b = r.U16((int)sh.TriOffset + i * 2 + 2), c = r.U16((int)sh.TriOffset + i * 2 + 4);
+            int a = r.U16((int)trisAt + i * 2), b = r.U16((int)trisAt + i * 2 + 2), c = r.U16((int)trisAt + i * 2 + 4);
             if (a < n && b < n && c < n) { idx.Add(a); idx.Add(b); idx.Add(c); }
         }
         mesh.Indices = [.. idx];
         return mesh;
     }
 
-    /// <summary>GT6 PMSH mesh with its data in the MDL3; several data blocks are merged (split or level: open).</summary>
-    static Mdl3Mesh? DecodePmsh(BigEndianReader r, Mdl3Pmsh pmsh, Mdl3PmshMesh mesh, out string reason)
+    /// <summary>
+    /// GT6 PMSH mesh: data blocks in the MDL3 (interiors, wheels) or, for car bodies, in the shape's body_s bundle
+    /// (same records, offsets relative to the bundle). Several data blocks are merged (split or level: open).
+    /// </summary>
+    static Mdl3Mesh? DecodePmsh(Mdl3File m, int shape, Mdl3Pmsh pmsh, Mdl3PmshMesh mesh, out string reason)
     {
         reason = "";
-        if (mesh.Declaration < 0 || mesh.Data.Count == 0 || mesh.Data[0].PackedVertices == 0) { reason = "PMSH data not in the file (body_s)"; return null; }
-        var parts = mesh.Data.Select(d => pmsh.Decode(r, mesh, d)).ToList();
+        if (mesh.Declaration < 0) { reason = "PMSH mesh without declaration"; return null; }
+        BigEndianReader r = m.Data;
+        var blocks = mesh.Data;
+        if (blocks.Count == 0 || blocks[0].PackedVertices == 0)
+        {
+            if (m.BodyS?.Shapes.TryGetValue(shape, out var sd) != true) { reason = "PMSH data not in the file and not in body_s"; return null; }
+            r = sd!.Bundle.R;
+            blocks = m.BodyS.Data(shape);
+        }
+        var parts = blocks.Select(d => pmsh.Decode(r, mesh, d)).ToList();
         if (parts.Count == 1) return parts[0];
         var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uvs = new List<Vector2>(); var idx = new List<int>();
         bool hasN = parts.All(p => p.Normals != null), hasUv = parts.All(p => p.Uvs != null);

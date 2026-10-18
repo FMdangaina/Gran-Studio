@@ -114,6 +114,40 @@ public sealed class Mdl3StreamMap
 }
 
 /// <summary>
+/// The shape data of a GT6 car body held in <c>body_s</c>: every bundle's shape table record (0x20: u32 shape index,
+/// 0, 0, +0C box (8 corners), +10 0x10 bytes (PMSH mesh +08 records), +14 PMSH data records (0x30 each, offsets
+/// relative to the bundle), +18 box again (x[4] y[4] z[4]), +1C data record count). First bundle holding a shape wins.
+/// </summary>
+public sealed class Mdl3BodyS
+{
+    public sealed record ShapeData(string Where, Mdl3StreamBundle Bundle, int Record, int DataRecords, int Count);
+
+    public Dictionary<int, ShapeData> Shapes { get; } = [];
+
+    public Mdl3BodyS(Mdl3StreamMap map, byte[] bodyS)
+    {
+        foreach (var (g, item, sub, s) in map.Streams())
+        {
+            if (s.HeaderChunks.Count + s.DataChunks.Count == 0) continue;
+            var b = new Mdl3StreamBundle(s.Load(bodyS));
+            for (int i = 0; i < b.ShapeCount; i++)
+            {
+                int at = b.ShapeTable + i * 0x20;
+                int shape = (int)b.R.U32(at);
+                if (!Shapes.ContainsKey(shape))
+                    Shapes[shape] = new ShapeData($"{g}[{item}]{(sub >= 0 ? "." + sub : "")}", b, at, (int)b.R.U32(at + 0x14), (int)b.R.U32(at + 0x1C));
+            }
+        }
+    }
+
+    /// <summary>The PMSH data blocks of a shape, read from its bundle (offsets relative to the bundle).</summary>
+    public List<Mdl3PmshData> Data(int shape) =>
+        Shapes.TryGetValue(shape, out var sd)
+            ? [.. Enumerable.Range(0, sd.Count).Select(k => Mdl3PmshData.Read(sd.Bundle.R, sd.DataRecords + k * 0x30))]
+            : [];
+}
+
+/// <summary>
 /// One inflated <c>body_s</c> bundle (header + data). Header (big-endian, its size = the header chunks):
 /// +00 0, +04 header size, +08 bundle size, +0C data size, +10 0, +14 u16 shape count, +16 u16 image count,
 /// +18 shape table (0x20 records, shape index first), +1C image table (0x10 records: u32 TXS3 image index,
