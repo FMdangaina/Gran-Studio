@@ -46,6 +46,7 @@ public sealed class MainForm : Form
         var viewMenu = new ToolStripMenuItem("&View");
         viewMenu.DropDownItems.Add(wireItem);
         viewMenu.DropDownItems.Add(texItem);
+        viewMenu.DropDownItems.Add(new ToolStripMenuItem("Te&xture browser...", null, (_, _) => ShowTextures()) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.T });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Frame all", null, (_, _) => FrameAll()) { ShortcutKeyDisplayString = "F" });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("Frame &selected", null, (_, _) => FrameSelected()) { ShortcutKeyDisplayString = "S" });
         menu.Items.Add(fileMenu);
@@ -161,9 +162,23 @@ public sealed class MainForm : Form
     /// <summary>The car list takes the lower third of the window (at least 260 px).</summary>
     void PlaceListSplitter() => outer.SplitterDistance = Math.Max(200, outer.Height - Math.Max(260, outer.Height / 3));
 
+    /// <summary>The texture browser on the open model (or empty, to open a file in it).</summary>
+    void ShowTextures()
+    {
+        var form = doc == null ? new TextureForm() : new TextureForm(doc.TextureSet, Text.Replace("GTViewer - ", ""));
+        form.Show(this);
+    }
+
     void Open(string path, string? title = null)
     {
         if (path.EndsWith("body_s", StringComparison.OrdinalIgnoreCase)) path = path[..^2];   // GT6: the body_s goes with body
+        if (IsTxs3File(path))
+        {
+            // a texture file (thumbnail, decken): the texture browser
+            var form = new TextureForm();
+            if (form.OpenFile(path)) form.Show(this); else form.Dispose();
+            return;
+        }
         ViewerDocument next;
         try
         {
@@ -191,6 +206,17 @@ public sealed class MainForm : Form
         if (doc == null) return;
         status.Text = $"{doc.File.Models.Count} models, {doc.File.Shapes.Count} shapes, {doc.Scene.Selectors.Count} switches, " +
             $"{doc.LodCount} LOD level(s), showing LOD{doc.Lod}: {doc.VisibleTriangles():N0} triangles{(renderer.Software ? " - software rendering" : "")}";
+    }
+
+    static bool IsTxs3File(string path)
+    {
+        try
+        {
+            using var f = File.OpenRead(path);
+            var head = new byte[4];
+            return f.Read(head, 0, 4) == 4 && head[0] == 'T' && head[1] == 'X' && head[2] == 'S' && head[3] == '3';
+        }
+        catch { return false; }
     }
 
     void FillTree()

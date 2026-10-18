@@ -25,8 +25,6 @@ public sealed class ViewerDocument : IDisposable
     readonly Dictionary<(int shape, int lod), GpuMesh?> meshes = [];
     readonly Dictionary<int, GpuTexture?> textures = [];      // by TXS3 image index
     readonly Dictionary<(int shape, int lod), string> failures = [];
-    List<Txs3Image>? images;
-    Dictionary<int, List<(string where, byte[] bundle, int offset)>>? bodySImages;
 
     public ViewerDocument(string path, Renderer renderer)
     {
@@ -94,7 +92,10 @@ public sealed class ViewerDocument : IDisposable
         return t;
     }
 
-    readonly Dictionary<int, byte[]?> decoded = [];
+    Mdl3TextureSet? textureSet;
+
+    /// <summary>Every TXS3 image of the file (shared with the texture browser, decoded once).</summary>
+    public Mdl3TextureSet TextureSet => textureSet ??= new Mdl3TextureSet(File);
 
     /// <summary>The diffuse map of a material: TXS3 image index and its level 0 as RGBA (null pixels when not decodable).</summary>
     public (int Image, byte[]? Rgba, int Width, int Height)? DiffuseImage(int material)
@@ -102,25 +103,10 @@ public sealed class ViewerDocument : IDisposable
         if (material < 0 || material >= File.Materials.Count) return null;
         var key = File.Materials[material]["diffuseMapSampler"];
         if (key == null || key.External || key.Index >= File.TextureInfos.Count) return null;
-        var info = File.TextureInfos[key.Index];
-        images ??= Txs3Image.ReadAll(File.Data, (int)File.Data.U32(0x48));
-        var img = images[info.ImageIndex];
-        if (!decoded.TryGetValue(info.ImageIndex, out var rgba))
-        {
-            try
-            {
-                if (img.Offset != 0) rgba = img.DecodeLevel0(File.Data.Data.AsSpan((int)img.Offset, (int)img.Size), info.Pitch);
-                else if (System.IO.File.Exists(Path + "_s") && Mdl3StreamMap.Read(File.Data) is { } map)
-                {
-                    bodySImages ??= map.FindImages(System.IO.File.ReadAllBytes(Path + "_s"));
-                    if (bodySImages.TryGetValue(info.ImageIndex, out var where) && where.Count > 0)
-                        rgba = img.DecodeLevel0(where[0].bundle.AsSpan(where[0].offset, (int)img.Size), info.Pitch);
-                }
-            }
-            catch { rgba = null; }
-            decoded[info.ImageIndex] = rgba;
-        }
-        return (info.ImageIndex, rgba, img.Width, img.Height);
+        int image = File.TextureInfos[key.Index].ImageIndex;
+        if (image >= TextureSet.Entries.Count) return null;
+        var img = TextureSet.Entries[image].Record;
+        return (image, TextureSet.Decode(image), img.Width, img.Height);
     }
 
     /// <summary>Triangles drawn with the current visibility, switches and LOD level (a shape drawn by two models once).</summary>

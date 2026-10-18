@@ -6,7 +6,9 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-(empty: the user picks the next item)
+12. **Readable object names in ZModeler** (user: "mi piacerebbe assai") — ZModeler 2.2.6 ignores OBJ `o`/`g` and
+   names the objects after `usemtl`: write one material per object, named like the object (`black.s14`,
+   `BODY.bonnet.s169`), same texture and colour, so the objects are readable in ZModeler. Viewer export and `gtdev`.
 
 ## Next
 
@@ -37,7 +39,7 @@ Tests and dumps: `tests\<topic>` (not committed).
    **sheet from the GT6 database** (maker, country, price, PP, engine, power, torque, red line, drive, weight, size,
    tyres, colours; GT5 cars use the GT6 row, 1064 / 1088). Fixed: GT6 names were shown as "(guessed)". UI checked
    off screen with `GTViewer --ui-shot <root> <tab> <search> <out.png>`. **To check by the user.**
-9. **Car data from the spec databases** (proposal) — the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
+9. **Car data from the spec databases** (user 2026-10-19: set it up, but keep it small for now) — the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
    tables, `gtdev gt6-specdb`): engine (power, torque curve torqueA-X over rpmA-X, rev limit, sound), chassis (mass,
    size, weight split, cd/cl, ride height), gears and final drive, drivetrain, suspension (springs, dampers, camber,
    toe, anti-roll), brakes, tyres, colours (VARIATION: names per paint = the `body_s` colour slots of item 5a), custom
@@ -202,4 +204,16 @@ material name per shape (later).
     `(no Maya name)` group; Maya default materials (`pdiCgFlex45`) keep `shape.sN`.
   Count per file (`mdl3-scene` survey): GT5 race 199 files with 5 levels + 33 with 6 (likely premium), 853 with 1;
   GT6 race body 515 with 2, 48 with 3, 660 with 1 (same 787B: GT5 5 levels, GT6 2). GT5 levels = same vertices, fewer
-  triangles; GT6 levels = separate meshes. Idea for later: GT5 race levels as low LODs of GT6 cars (check fit first).
+  triangles; GT6 levels = separate meshes. GT5 race levels as low LODs of GT6 cars: **rejected by the user** (2026-10-19).
+- **11. Texture viewer** (closed by the user 2026-10-19; "first a viewer of textures only", before item 7) — a window that lists
+  every TXS3 image of the open file (GT6 bodies: pixels from `body_s`) or of a stand-alone TXS3 file (thumbnails,
+  `decken`): thumbnail, texture names, size, format, mips, cube / 3D, the materials and samplers that use it, and the
+  external samplers (provided by the game). Big view with zoom, RGB / alpha / RGBA, faces and slices of cubes and 3D
+  textures; save the selected one or all as PNG. Done when the user browses the textures of a GT5 and a GT6 car.
+  2026-10-19 coded: `Mdl3TextureSet` (GTFormats: images, names, users, external samplers, decode from the file or
+  `body_s`, also stand-alone TXS3; the 3D view uses it too), `TextureForm` (View > Texture browser, Ctrl+Shift+T;
+  opening or dropping a TXS3 file opens it): thumbnails grouped by sampler (diffuse first), filter, zoom / pan,
+  channels, faces / slices, **Upright** (GT rows are stored bottom up; on by default, also for the saved files), info
+  panel, save one / all as **PNG or TGA** (32-bit with alpha, user request; the TGA equals the PNG pixel for pixel). `GTViewer --tex-shot <file> <out.png> [image] [channel]` = off-screen check: S2000 GT6
+  race body (58 images from `body_s`), GT6 wheel, GT5 hq, GT6 thumbnail, GT5 `decken` (`.00` = empty red, alpha 0).
+  Checked by the user.
