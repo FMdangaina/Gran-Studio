@@ -50,8 +50,11 @@ static class Mdl3Obj
                     if (!drawnBy.TryGetValue(s, out var l)) drawnBy[s] = l = [];
                     if (!l.Contains(mi)) l.Add(mi);
                 }
+        // helper = drawn only by helper models, or under a helper root node (instance models are named FIX4, FIX5...)
         return [.. Enumerable.Range(0, m.Shapes.Count)
-            .Where(s => allModels || drawnBy.GetValueOrDefault(s, []).Any(mi => !IsHelperModel(m.ModelNames.GetValueOrDefault(mi, ""))))];
+            .Where(s => allModels ||
+                (drawnBy.GetValueOrDefault(s, []).Any(mi => !IsHelperModel(m.ModelNames.GetValueOrDefault(mi, ""))) &&
+                 !IsHelperModel(m.ShapeNames.TryGetValue(s, out var n) ? n[0].Split('|', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "" : "")))];
     }
 
     /// <summary>Most LOD levels of the given shapes (1 when none has packed LODs).</summary>

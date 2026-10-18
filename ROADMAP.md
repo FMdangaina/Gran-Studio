@@ -20,7 +20,7 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   Visual check: RX-7 GT (00010075), RX-7, GT-R (00030128), race 00010095 look whole
 - [x] 4c. GT5 packed indices: Edge-style values + 2-bit codes (3 new, 0/1 share an edge), size rule exact on all segments.
   Open: shape +26 higher than the sum on ~1% of shapes (dropped degenerates?), 5 last LOD levels, segment +08/+0C blocks
-- [x] 4c.1 Export fixes from `ISSUES.md` (checked by the user in Blender: meshes import correctly; the export format
+- [x] 4c.1 Export fixes from `ISSUES.md` (checked by the user in ZModeler 2.2.6: meshes import correctly; the export format
   will change when it has to be usable, item 6): shared decoder `Mdl3Mesh`;
   readable object names from the Maya paths (`ShapeNaming`); only the visible models (no shadow / self-shadow / light
   mask copies, `--all-models` for all); one file per LOD level; `gtdev mdl3-gltf` with the node hierarchy.
@@ -29,15 +29,18 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   (op6 = engine matrix slot), segment +08 LOD streams (maybe LOD normals/positions)
 - [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices). **Decoded** for the data held
   in the MDL3 (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 interior/wheel/tire/carparts files, 61,397 blocks, 0 positions
-  outside the box, 31 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Left: visual check by the user
-  (`tests\pmsh\demio_wheel`, `demio_interior`), the 31 blocks, GT6 bodies (same format, data in `body_s`: with item 5)
+  outside the box, 3 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Demio interior OK for the
+  user (ZModeler); wheel was wrong (double-buffered vertex loads), fixed: to recheck (`tests\pmsh\demio_wheel`).
+  Left: the 3 blocks, GT6 bodies (same format, data in `body_s`: with item 5)
 - [ ] 4e. Check over every car file, 0 failures
 
 ## Next
 
 5. **GT6 `body_s`** — container known (3d: stream map, bundles, images); left: the shape data in the bundles,
    the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
-6. **Viewer** — Direct3D 11 (Vortice.Windows), read only.
+6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: shows the model **hierarchy**
+   (models, Maya groups, shapes, switch variants, LODs) so the user understands how a car is built.
+   Exports must work in ZModeler 2.2.6 (OBJ / 3DS); glTF is not read there.
 7. **Materials and textures for display** — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
    ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
    external ones (sampler 0x8000 | n, provided by the game):

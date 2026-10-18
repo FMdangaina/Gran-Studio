@@ -134,9 +134,19 @@ public static class Mdl3PmshCommands
         Array.Fill(slots, -1);
         var tris = new List<int>();
         long bit = 0;
-        foreach (var c in commands)
+        // op5 loads are double-buffered: the load for the next batch is issued before the current batch draws,
+        // and batches still read slots of earlier ones; a queued load takes effect at the next op14 (batch start)
+        // An op5 holds at most 15 groups: a longer load continues in the next op5 at the slot where it ended.
+        var pending = new List<List<Mdl3PmshCommand>>();
+        static int End(Mdl3PmshCommand c)
         {
-            if (c.Opcode == 5)
+            int slot = c.Operands[0];
+            for (int g = 0; g < c.Operands[1] + c.Operands[2]; g++) slot += c.Operands[4 + g * 2] + 1;
+            return slot;
+        }
+        void Load(List<Mdl3PmshCommand> load)
+        {
+            foreach (var c in load)
             {
                 int slot = c.Operands[0], groups = c.Operands[1] + c.Operands[2];
                 for (int g = 0; g < groups; g++)
@@ -145,6 +155,16 @@ public static class Mdl3PmshCommands
                     for (int k = 0; k < n; k++) slots[(slot++) & (slots.Length - 1)] = first + k;
                 }
             }
+        }
+        foreach (var c in commands)
+        {
+            if (c.Opcode == 5)
+            {
+                var last = pending.Count > 0 ? pending[^1][^1] : null;
+                if (last != null && last.Operands[1] + last.Operands[2] == 15 && (End(last) & (slots.Length - 1)) == c.Operands[0]) pending[^1].Add(c);
+                else pending.Add([c]);
+            }
+            else if (c.Opcode == 14 && pending.Count > 0) { Load(pending[0]); pending.RemoveAt(0); }
             else if (c.Opcode == 1 || c.Opcode == 2)
             {
                 // op1: 4 n triangles; op2 (inside op15, SmoothMesh cage): 4 n quads, split into (a,b,c) (a,c,d)

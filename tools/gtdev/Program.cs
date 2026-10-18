@@ -12,6 +12,7 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-obj <file> <out.obj> [--all-models]   shapes as OBJ (readable names, one file per LOD) + MTL + PNG, stats in <out>.txt");
     Console.WriteLine("  mdl3-gltf <file> <out.gltf> [--all-models]   the same as glTF with the node hierarchy, one file per LOD");
     Console.WriteLine("  mdl3-tree <file> [out.txt]   bones, VM registers and model command streams with shape names");
+    Console.WriteLine("  mdl3-preview <file> <out.png> [x|y|z] [shapeRegex] [--lod N] [--all-models] [--size N]   shaded PNG view of the decoded shapes");
     Console.WriteLine("  mdl3-normals <files.tsv> <groupRegex> <out.txt>   vertex normals vs triangle winding, per LOD level");
     Console.WriteLine("  mdl3-samplers <files.tsv> <groupRegex> <out.txt>   texture samplers of the materials: in file / external, names");
     Console.WriteLine("  pmsh-dump <file> [out.txt] | pmsh-probe <file> <mesh> | pmsh-survey / pmsh-check <files.tsv> <groupRegex> <out.txt>   GT6 PMSH research and check");
@@ -33,6 +34,7 @@ return args[0] switch
     "mdl3-obj" => Mdl3Obj.Run(args[1..]),
     "mdl3-gltf" => Mdl3Gltf.Run(args[1..]),
     "mdl3-tree" => Mdl3Tree.Run(args[1..]),
+    "mdl3-preview" => Mdl3Preview.Run(args[1..]),
     "mdl3-normals" => Mdl3Normals.Run(args[1..]),
     "mdl3-samplers" => Mdl3Samplers.Run(args[1..]),
     "pmsh-dump" => PmshDump.Run(args[1..]),

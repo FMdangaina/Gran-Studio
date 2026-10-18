@@ -58,6 +58,28 @@ static class PmshProbe
         }
         Console.WriteLine($"   triangles {tri.Length / 3}, unloaded slots {tri.Count(x => x < 0)}, max vertex {(tri.Length > 0 ? tri.Max() : -1)} (V {V}), " +
                           $"vertices used {tri.Where(x => x >= 0).Distinct().Count()}, index bits {used} of {d.IndexQuadwords * 128}, degenerate {degenerate}, edge twice {twice}");
+        // long triangles per op1/op2 batch (edge > 4 x the median edge)
+        {
+            var decoded = p.Decode(r, me, d);
+            var P = decoded.Positions;
+            var cmds = Mdl3PmshCommands.Decode(r.Data, (int)d.Commands, d.CommandQuadwords * 16, d.IndexBits, p.Entries1C);
+            var lens = new List<float>();
+            for (int i = 0; i + 2 < tri.Length; i += 3)
+                if (tri[i] >= 0 && tri[i + 1] >= 0 && tri[i + 2] >= 0)
+                    lens.Add(MathF.Max(Vector3.Distance(P[tri[i]], P[tri[i + 1]]), MathF.Max(Vector3.Distance(P[tri[i + 1]], P[tri[i + 2]]), Vector3.Distance(P[tri[i]], P[tri[i + 2]]))));
+            if (lens.Count > 0)
+            {
+                float med = lens.OrderBy(x => x).ElementAt(lens.Count / 2);
+                int t = 0, batch = 0;
+                foreach (var c in cmds.Where(c => c.Opcode is 1 or 2))
+                {
+                    int n = c.Operands[0] * 4, longOnes = 0, count = 0, first = t;
+                    // padding triangles were dropped in tri: count only what is there
+                    while (count < n && t < lens.Count) { if (lens[t] > 4 * med) longOnes++; t++; count++; }
+                    Console.WriteLine($"   batch {batch++} op{c.Opcode}({c.Operands[0]}) tris {first}..{t - 1}: long {longOnes}");
+                }
+            }
+        }
         int nv = (int)(used / d.IndexBits);
         Console.WriteLine($"   values after the list (from {nv}): " + string.Join(',', Enumerable.Range(nv, 60).Select(i => Bits(r.Data, (int)d.Indices, (long)i * d.IndexBits, d.IndexBits, true))));
         Console.WriteLine($"   bytes after the list (from byte {used / 8}): " + string.Join(' ', Enumerable.Range((int)(used / 8), 48).Select(k => r.U8((int)d.Indices + k).ToString("X2"))));
