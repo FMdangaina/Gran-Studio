@@ -74,8 +74,7 @@ static class Mdl3Obj
     }
 
     /// <summary>Models that are not the visible car: shadow volumes/planes, self-shadow copies, light masks, projections.</summary>
-    public static bool IsHelperModel(string name) =>
-        name.Contains("SHADOW") || name.Contains("_SS_") || name.Contains("LIGHT_MASK") || name.Contains("ILLUMINATION") || name.Contains("PROJECTION");
+    public static bool IsHelperModel(string name) => Mdl3Scene.IsHelperModel(name);
 
     static int Export(Mdl3File m, List<int> shapes, int lod, string path, string mtlName, SortedSet<int> usedMaterials, StringBuilder? log, out int skipped)
     {

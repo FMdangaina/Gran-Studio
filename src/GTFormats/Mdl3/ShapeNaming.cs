@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
-using GTFormats.Mdl3;
+
+namespace GTFormats.Mdl3;
 
 /// <summary>
 /// Readable names from the Maya node paths of the shapes (shapeKeys): drops the technical nodes
@@ -7,7 +8,7 @@ using GTFormats.Mdl3;
 /// names (pPlane154, polySurface35, subdTessShape48...), strips the GT_/GTM_/GTB_/GTBE_ prefixes and the Shape suffixes.
 /// Only renames: every kept word comes from the file.
 /// </summary>
-static partial class ShapeNaming
+public static partial class ShapeNaming
 {
     [GeneratedRegex(@"^(FIX|GT_BATCH_FIX|GT_LOD|LOD_[LHM]\d*|transform\d*|SHARE_GROUP|GT_INTERIOR_SHARE|GTM_FULL_SUS_\w+|[LH]\d*)$")]
     private static partial Regex Technical();
