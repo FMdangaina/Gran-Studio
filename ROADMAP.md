@@ -30,7 +30,7 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
 - [ ] 4d. GT6 `PMSH` packed meshes (bit layouts, packed/raw vertices, packed indices). **Decoded** for the data held
   in the MDL3 (`Mdl3Pmsh.Decode`, `gtdev pmsh-check`: 4717 interior/wheel/tire/carparts files, 61,397 blocks, 0 positions
   outside the box, 3 blocks with unused vertices); `mdl3-obj` / `mdl3-gltf` export them. Demio interior OK for the
-  user (ZModeler); wheel was wrong (double-buffered vertex loads), fixed: to recheck (`tests\pmsh\demio_wheel`).
+  user (ZModeler); wheel was wrong (double-buffered vertex loads), fixed and checked by the user (ZModeler: OK).
   Left: the 3 blocks, GT6 bodies (same format, data in `body_s`: with item 5)
 - [ ] 4e. Check over every car file, 0 failures
 
@@ -38,9 +38,12 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
 
 5. **GT6 `body_s`** — container known (3d: stream map, bundles, images); left: the shape data in the bundles,
    the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
-6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: shows the model **hierarchy**
-   (models, Maya groups, shapes, switch variants, LODs) so the user understands how a car is built.
-   Exports must work in ZModeler 2.2.6: OBJ (the user does not want 3DS; glTF is not read there).
+6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model
+   hierarchy (models, Maya groups, shapes, switch variants, LODs) next to the 3D view, so the user understands how a
+   car is built (requested by the user 2026-10-18).
+   Exports must work in ZModeler 2.2.6: OBJ (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
+   OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`, `m004`...): readable names in ZModeler would
+   need one material name per shape (later, not needed now).
 7. **Materials and textures for display** — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
    ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
    external ones (sampler 0x8000 | n, provided by the game):
