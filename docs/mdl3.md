@@ -527,6 +527,48 @@ the materials that sample them).
   `database\gt6\menudb.dat`: encrypted SQLite, no reader yet). Variations are not the paint colours one by one: the
   RX-8 (0001/0001) has V = 1 but several colours (the body colour itself is a material constant from the database).
 
+### Item 5b: the `custom_*` groups = optional parts, chosen by the op54 switch
+
+`gtdev bodys-custom <files.tsv> <groupRegex> <out.txt>` (all 2454 GT6 bodies, `tests\body_s_subs\custom.txt`) and
+`gtdev bodys-custom <body>` (one car: every op54 with its branches, every group item with its shape names).
+
+- Groups and what they are (Maya node words of their shapes): `custom_a` bonnet (carbon bonnet, bonnet pins),
+  `custom_b` muffler, `custom_c` rear wing, `custom_d` front bumper / spoiler / side parts, `custom_e` flat floor
+  (under body), `custom_f` roof cover; `custom_brake` brake discs, `custom_caliper` brake calipers (in almost every
+  car: 2438 / 2448 bodies). Item k = option k; item 0 is often empty (the part off / the standard part in `/`).
+- **op54** (v14 only) `<u16 register> <u8 n> <n x u16 rel>` is the switch that draws them: like op5, each rel is
+  relative to the end of its own entry, the op9 right after the entries is the default (jump to the end), each
+  branch ends with an op9 to the end. The branches of all op54 with the same register (over all models: body,
+  self-shadow, shadow box) together draw **exactly** the shapes of item k of one group: 18,039 of 18,039 items.
+  One op54 draws only a few shapes (one place in the scene), so a group is spread over many op54.
+- The register is a VM register: one per group, constant offset from the group index in 2130 bodies (base 0x20 on
+  0001/0012, 21 on 0001/0095, 6 on 0001/0001; 324 bodies have another order). The game sets it from the host
+  registers `custom0`..`custom5` (a..f), `custom10` (brake), `custom11` (caliper): these names match the groups in
+  2065 bodies; in the others there is a host register for a part with no `body_s` group.
+- Custom items can have sub streams too (70 items: mostly wings `custom_c`, also `custom_d`, `custom_e`, calipers):
+  always the same count as the `/` item and only images, i.e. the colour variations of 5a for the option parts.
+- Open: 25 op54 without the default op9 (0002/0025 race...), 20 registers whose branches fit no group, 23 groups never
+  switched (all in those bodies).
+
+### Item 5c: the same car in GT5 and GT6
+
+`gtdev gt5-gt6 <gt5 root> <gt6 root> <out.txt>` (`tests\body_s_subs\gt5_gt6.txt` + `.tsv`): GT6 `car\MMMM\NNNN\{hq,race}\body`
+against GT5 `car\{hq,race}\MMMMNNNN`. 1024 cars are in both (hq and race), 203 are GT6 only.
+
+- Same model list, plus two new models in **every** GT6 car: `GTBE_MENU_INTERIOR` (cabin for the menus) and
+  `GTBE_OCCLUSION`.
+- Same Maya scene, reworked: a median 63% of the GT5 shape paths are still in GT6 (only the GT-R 00030128 keeps
+  almost all); shapes about the same or more (GT6 1.1-2x on a third of the cars, up to 2.3x on the 1989 Roadster
+  with its soft top); GT5 textures found in GT6 by name: 1-50% on 456 cars, 50-99% on 568.
+- Materials: GT6 duplicates the colour-dependent ones (`_CLR_VARI_k`, 5a); without that suffix 50-99% of the GT5
+  material names are still there on 831 cars (1-50% on 190).
+- Geometry storage: GT5 = plain + packed shapes in the MDL3 (item 4); GT6 = 50-99% of the shapes are PMSH whose data
+  is in `body_s`, the others plain (in the file).
+- Custom parts: 817 GT5 cars already had `CUSTOM_` nodes in the model (all in the MDL3); GT6 moves them into the
+  `body_s` groups and 207 cars get them new.
+- Bones: GT6 has fewer (often 0 where GT5 had 1; 14 -> 10 on 0001/0095); 23 cars more (the Roadster: 1 -> 9, the
+  soft top joints).
+
 ### Item 4e: every car file through the shared decoder
 
 `gtdev mesh-check <files.tsv> <groupRegex> <out.txt>` decodes every shape of every file at every LOD level with
@@ -571,7 +613,8 @@ Differences and open points we found:
 - GT5 packed geometry: decoded (above). Open: segment +08 extra streams (geomorph?) and +0C block, H +0E, L flags,
   M Y, position format +08..+0B and +2E, the 0x40 record floats, p1/p2/p4/p5 tables (their link to p3), the shape +26 differences.
 - GT6 PMSH data: decoded (above). Open: 1-byte stream, +08 entries, flag 0x01, output count > V.
-- GT6 `body_s`: shape records decoded (above); `/` sub streams = colour variations (5a, above); `custom_*` groups: item 5b.
+- GT6 `body_s`: shape records decoded (above); `/` sub streams = colour variations (5a), `custom_*` groups = optional
+  parts switched by op54 (5b), GT5 vs GT6 (5c).
   Open: which paint colour uses which variation (encrypted GT6 database), why two halves (half A = soft top / roof /
   cabin colour parts, half B = body paint).
 - Small open fields (data is fully located, meaning unknown): material block byte +04 (no match with any count),

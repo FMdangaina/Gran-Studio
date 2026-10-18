@@ -41,7 +41,7 @@ static class Mdl3Tree
                     _ => "",
                 };
                 string shapes = string.Join(" ; ", c.Shapes.Select(s => $"s{s} {(m.ShapeNames.TryGetValue(s, out var n) ? n[0].Split('|')[^2] : "")}"));
-                w.WriteLine($"  {c.Offset:X4} {new string(' ', depth * 2)}op{c.Opcode} {ops}{extra}  {shapes}");
+                w.WriteLine($"  {c.Offset:X4} {new string(' ', Math.Max(0, depth) * 2)}op{c.Opcode} {ops}{extra}  {shapes}");
                 if (c.Opcode == 14) depth++;
             }
         }

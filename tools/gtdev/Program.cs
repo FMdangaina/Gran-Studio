@@ -24,6 +24,8 @@ if (args.Length == 0)
     Console.WriteLine("  txs3-png <file> <outDir> | <files.tsv> <groupRegex> <out.txt>   decode TXS3 images to PNG / decode check");
     Console.WriteLine("  body-s <files.tsv> <groupRegex> <out.txt> | <body> <out.txt>   GT6 body_s map: streams, bundles, image pixels");
     Console.WriteLine("  bodys-subs <files.tsv> <groupRegex> <out.txt>   item 5a: what the '/' sub streams of body_s hold");
+    Console.WriteLine("  bodys-custom <files.tsv> <groupRegex> <out.txt> | <body>   item 5b: custom_* groups vs the op54 switches");
+    Console.WriteLine("  gt5-gt6 <gt5 root> <gt6 root> <out.txt>   item 5c: the same car code in GT5 and GT6");
     return 1;
 }
 
@@ -56,6 +58,8 @@ return args[0] switch
     "txs3-png" => Txs3Png.Run(args[1..]),
     "body-s" => BodySCheck.Run(args[1..]),
     "bodys-subs" => BodySSubs.Run(args[1..]),
+    "bodys-custom" => BodySCustom.Run(args[1..]),
+    "gt5-gt6" => Gt5Gt6Compare.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 

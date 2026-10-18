@@ -11,15 +11,20 @@ Container known (3d: stream map, bundles, images), shape data decoded (4d). Expl
 are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
 against the game data) and the GT6 vs GT5 differences of the same car are written down. Findings in `docs/mdl3.md`.
 
-- [ ] 5a. `/` sub streams (`gtdev bodys-subs`, all 2454 bodies): **colour variations**. Materials `..._CLR_VARI_k`
+- [x] 5a. `/` sub streams (`gtdev bodys-subs`, all 2454 bodies): **colour variations**. Materials `..._CLR_VARI_k`
   (GT6 only); `/` has 2 x (V + 1) sub streams, two halves, slot k = images of the `CLR_VARI_k` materials (12,802 of
   13,461 non-empty slots; the rest = shared copies in half A and the last slots), last slot = `_PaintExtraBRDF`
   materials (special paints). Half B = body paint, half A = soft top / roof / stripes / cabin colours (empty on 1891
   bodies). No shapes, only images (mostly colour-shift BRDF).
   Open: which paint colour picks which variation (GT6 database, encrypted SQLite), why two halves
-- [ ] 5b. `custom_*` groups (`custom_brake0`, `custom_caliper0`, `custom_a0`..`custom_f0`): which shapes and images each
-  item holds, how the model selects a variant (switches), the part names they stand for
-- [ ] 5c. GT6 vs GT5 on the same car code (963 cars in both): models, shapes, LODs, materials, textures
+- [x] 5b. `custom_*` groups (`gtdev bodys-custom`): optional parts, a bonnet, b muffler, c rear wing, d front bumper /
+  spoiler, e flat floor, f roof cover, brake discs, calipers; item k = option k. Drawn by the v14 switch **op54**
+  (one VM register per group, set from host registers `custom0..5/10/11`): branch k of all op54 of a register =
+  exactly the shapes of item k (18,039 / 18,039). Custom items with sub streams = colour variations (70).
+  Open: 25 op54 without default jump, 20 registers fitting no group
+- [x] 5c. GT5 vs GT6 (`gtdev gt5-gt6`): 1024 cars in both, 203 GT6 only. Same model list + `GTBE_MENU_INTERIOR` and
+  `GTBE_OCCLUSION` in every GT6 car; same Maya scene reworked (median 63% of the GT5 shape paths kept); GT6 adds
+  CLR_VARI materials, moves geometry to PMSH in `body_s` and custom parts to the `body_s` groups; fewer bones
 
 ## Next
 
