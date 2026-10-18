@@ -1,0 +1,64 @@
+using System.Drawing.Imaging;
+using System.Globalization;
+using System.Numerics;
+using GTViewer.Rendering;
+
+namespace GTViewer;
+
+/// <summary>
+/// GTViewer --shot &lt;file&gt; &lt;out.png&gt; [--yaw D] [--pitch D] [--lod N] [--size WxH] [--wire] [--flat]
+/// [--set selector=branch]... [--obj out.obj]: render the default view of a file off screen to a PNG and exit (no window), so the
+/// renderer can be checked without using the mouse. Writes a text report next to the PNG.
+/// </summary>
+static class Shot
+{
+    public static int Run(string[] args)
+    {
+        string file = args[1], output = args[2];
+        int w = 1280, h = 800;
+        var cam = new OrbitCamera();
+        using var renderer = new Renderer();
+        int lod = 0;
+        bool flat = false;
+        var sets = new List<(int, int)>();
+        string? objPath = null;
+        for (int i = 3; i < args.Length; i++)
+            switch (args[i])
+            {
+                case "--yaw": cam.Yaw = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--pitch": cam.Pitch = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--lod": lod = int.Parse(args[++i]); break;
+                case "--size": var p = args[++i].Split('x'); w = int.Parse(p[0]); h = int.Parse(p[1]); break;
+                case "--wire": renderer.Wireframe = true; break;
+                case "--flat": flat = true; break;
+                case "--set": var q = args[++i].Split('='); sets.Add((int.Parse(q[0]), int.Parse(q[1]))); break;
+                case "--obj": objPath = args[++i]; break;
+            }
+        renderer.CreateOffscreen(w, h);
+        using var doc = new ViewerDocument(file, renderer) { Lod = lod, Textures = !flat };
+        foreach (var (s, b) in sets) doc.State[s] = b;
+        var items = doc.DrawItems(out var min, out var max);
+        cam.Frame(min, max);
+        renderer.Render(cam.ViewProj(w / (float)h), new Vector3(-0.4f, -1, -0.6f), items);
+        var px = renderer.ReadPixels();
+        using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+        {
+            var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            for (int y = 0; y < h; y++) System.Runtime.InteropServices.Marshal.Copy(px, y * w * 4, data.Scan0 + y * data.Stride, w * 4);
+            bmp.UnlockBits(data);
+            bmp.Save(output, ImageFormat.Png);
+        }
+        if (objPath != null) ObjExport.Write(doc, objPath);   // the same export as File > Export visible to OBJ
+        var shapes = doc.VisibleShapes().ToList();
+        int failed = shapes.Count(n => doc.Mesh(n.Shape, out _) == null);
+        File.WriteAllLines(System.IO.Path.ChangeExtension(output, ".txt"),
+        [
+            $"{file}: {(renderer.Software ? "WARP (software)" : "hardware")} device, {w}x{h}, LOD {lod}/{doc.LodCount}",
+            $"visible shape nodes {shapes.Count}, drawn {items.Count}, without mesh {failed}, textured {items.Count(i => i.Texture != null)}",
+            $"box {min} .. {max}",
+            .. doc.Scene.Selectors.Select(s => $"switch [{s.Id}] {s.Name} = {doc.State[s.Id]}"),
+            .. shapes.Select(n => (n, f: doc.Mesh(n.Shape, out var why) == null ? why : null)).Where(x => x.f != null).Select(x => $"no mesh: s{x.n.Shape} {x.n.Name}: {x.f}"),
+        ]);
+        return 0;
+    }
+}

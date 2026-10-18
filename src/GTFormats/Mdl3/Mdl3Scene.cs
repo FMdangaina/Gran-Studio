@@ -57,6 +57,19 @@ public sealed partial class Mdl3Scene
     /// <summary>Models shown when a file is opened: not the helpers, not the GT6 menu cabin and occlusion copies.</summary>
     public static bool DefaultOn(string model) => !IsHelperModel(model) && !model.Contains("MENU_INTERIOR") && !model.Contains("OCCLUSION");
 
+    /// <summary>
+    /// Model shown when the file is opened: <see cref="DefaultOn(string)"/>, not an instance copy (FIX1, FIX2...: the
+    /// same part again, e.g. the lower wheel levels), and its shapes not under a helper root node (WHEEL_SHADOW_...).
+    /// </summary>
+    public bool DefaultOn(int model)
+    {
+        string name = File.ModelNames.GetValueOrDefault(model, "");
+        if (!DefaultOn(name) || Regex.IsMatch(name, @"^FIX\d+$")) return false;
+        var roots = Draws.Where(d => d.Value.Any(x => x.Model == model))
+            .Select(d => File.ShapeNames.TryGetValue(d.Key, out var n) ? n[0].Split('|', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "" : "").ToList();
+        return roots.Count == 0 || roots.Any(r => !IsHelperModel(r));
+    }
+
     public Mdl3Scene(Mdl3File m, string rootName)
     {
         File = m;

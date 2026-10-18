@@ -12,17 +12,24 @@ Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **Tree
 car is built (requested by the user 2026-10-18). Done when the user opens a GT5 and a GT6 car (body, interior, wheel)
 and finds the tree and the 3D view right.
 
-- [ ] 6a. Scene tree in `GTFormats` (shared by viewer and gtdev): models -> Maya path nodes -> shapes, with the switch
-  branches (op5 day/night, lights...; op54 custom parts = group/item names from 5b) and the LOD levels; readable names
-  (`ShapeNaming` moves from gtdev); `gtdev mdl3-scene <file>` prints it for checking
-- [ ] 6b. Renderer: D3D11 device, vertex/index buffers from `Mdl3Mesh`, orbit camera (left drag rotate, right/middle
-  pan, wheel zoom), simple lighting, wireframe toggle; off-screen render to PNG (`gtdev view-shot`) so it can be checked
-  without clicking the UI
-- [ ] 6c. Window: File > Open (any car MDL3: GT5 hq/race/interior/wheel, GT6 body/interior/wheel), TreeView with
-  check boxes (show/hide a node), selection highlights the shape, info panel (shape index, material, vertex/triangle
-  counts, LOD), LOD and switch/custom option pickers
-- [ ] 6d. Diffuse textures on the meshes (TXS3, GT6 from `body_s`), toggle textures / flat
-- [ ] 6e. Export the visible shapes to OBJ (ZModeler 2.2.6) from the viewer
+- [x] 6a. Scene tree in `GTFormats` (`Mdl3Scene`, shared by viewer and gtdev): models -> Maya path nodes -> shapes,
+  every op5/op54 switch as a selector with named branches (custom parts = `body_s` group, or the `CUSTOM_x` Maya node in
+  interiors; state switches = the Maya words only their branch has: DAYTIME / NIGHT, BRAKE_ON...), the branches each
+  shape is drawn in, LOD level from `LEVEL_n`; `ShapeNaming` moved to GTFormats. `gtdev mdl3-scene <file>` prints it;
+  survey over 17,012 car/wheel files: only the 19 known MDL3 v1-4 files fail
+- [x] 6b. Renderer (Vortice 3.8.3, D3D11, WARP fallback): GPU meshes from `Mdl3Mesh`, two-sided Lambert, wireframe,
+  orbit camera; `GTViewer --shot <file> <out.png> [--yaw --pitch --lod --set sel=branch --wire --flat --obj]`
+  renders off screen (checked: Demio GT6 body/interior/wheel, RX-7 GT5 hq night, race 00010095 LOD0-3, Roadster wing
+  option 3, GT5 wheel)
+- [ ] 6c. Window: File > Open (or drop a file / give it on the command line), TreeView with check boxes (show / hide;
+  shapes grey when the switches or LOD do not draw them; switched shapes show their options), switches and LOD
+  pickers, selection highlighted in orange + status bar (shape, material, triangles, Maya path), double-click or S
+  frames the selection, F frames all, Ctrl+W wireframe, Ctrl+T textures. At load: helper models hidden (shadow,
+  self-shadow, light mask, menu cabin, occlusion, FIXn instance copies). **To check by the user**
+- [x] 6d. Diffuse textures (in the file or GT6 `body_s`); parts without a diffuse map (paint, GT6 wheels) get a soft
+  colour per material: real colours are item 7
+- [ ] 6e. File > Export visible to OBJ (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
+  152,758 faces). **To check by the user in ZModeler**
 
 Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
 OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
