@@ -11,6 +11,11 @@ game files and note in `docs/` where our results agree or differ.
 - **GTToolsSharp** by Nenkai, MIT license — https://github.com/Nenkai/GTToolsSharp
   (C# port of **flatz**'s gttool; used to extract the GT5/GT6 volumes. Thanks to flatz too.)
 
+## Libraries (NuGet packages, not in the repository)
+
+- **Vortice.Windows** (Vortice.Direct3D11, Vortice.D3DCompiler, Vortice.DXGI, Vortice.Mathematics) 3.8.3 by Amer Koleci,
+  MIT license — https://github.com/amerkoleci/Vortice.Windows — Direct3D 11 bindings used by GTViewer.
+
 ## Code
 
 No third-party code is copied into this repository. Format knowledge (field layouts, opcode operand sizes) from
