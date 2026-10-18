@@ -17,6 +17,7 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-samplers <files.tsv> <groupRegex> <out.txt>   texture samplers of the materials: in file / external, names");
     Console.WriteLine("  pmsh-dump <file> [out.txt] | pmsh-probe <file> <mesh> | pmsh-survey / pmsh-check <files.tsv> <groupRegex> <out.txt>   GT6 PMSH research and check");
     Console.WriteLine("  mdl3-packed <files.tsv> <groupRegex> <out.txt>   decode and check every GT5 packed shape");
+    Console.WriteLine("  mesh-check <files.tsv> <groupRegex> <out.txt> [--every N]   item 4e: every shape at every LOD with the shared decoder");
     Console.WriteLine("  mdl3-mat <files.tsv> <groupRegex> <out.txt>   column stats of the material, SHDS and TXS3 blocks");
     Console.WriteLine("  mdl3-coverage <files.tsv> <groupRegex> <out.txt> | <file> <out.txt>   byte coverage + table checks");
     Console.WriteLine("  txs3-survey <files.tsv> <groupRegex> <out.txt>   TXS3 image formats, mipmaps, computed vs record size");
@@ -43,6 +44,9 @@ return args[0] switch
     "pmsh-check" => PmshCheck.Run(args[1..]),
     "bodys-shapes" => BodySShapes.Run(args[1..]),
     "mdl3-packed" => Mdl3PackedCheck.Run(args[1..]),
+    "mesh-check" => MeshCheck.Run(args[1..]),
+    "s1-probe" => S1Probe.Run(args[1..]),
+    "shape-dump" => ShapeDump.Run(args[1..]),
     "mdl3-mat" => Mdl3MatCheck.Run(args[1..]),
     "mdl3-uv" => Mdl3UvCheck.Run(args[1..]),
     "mdl3-matcheck" => Mdl3MatLayout.Run(args[1..]),

@@ -103,11 +103,19 @@ Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; 
 | +28 | u32 bbox offset (8 corners) | always set | always 0 |
 | +2C | u32 packed mesh reference offset | set in 84% | set exactly when vertex count is 0 |
 
-- Triangles of plain GT5 shapes (first look, 3 cars with `gtdev mdl3-obj`, all shapes): u16 indices at +18 (absolute),
-  **+14 is the index count = 3 x triangle count**, plain triangle lists, no strips and no 0xFFFF restarts. To check on all files in item 4.
+- Triangles of plain shapes: u16 indices at +18 (absolute), +14 = index count. In GT5 the **low nibble of +00 is the
+  RSX primitive**: 5 = triangle list (+14 = 3 x +26), 6 = triangle strip with the restart index of +20 (0xFFFF),
+  degenerate triangles skipped, winding flipped on odd positions of each strip (1755 GT5 tire shapes; the non-degenerate
+  count = +26 on all). GT6 plain shapes have nibble 1 or 9 and are all lists.
+- Empty shapes (0 vertices, 0 triangles, +26 0, never drawn): 5128 GT5 tire `*_side` templates, 265 GT5 wheel shapes.
 - In GT6 a shape is either plain (vertex count set, offsets 0: the data must be in `body_s`) or packed, never both.
 - In GT5 most body shapes are packed (all of them in car 00010007 hq): see "GT5 packed geometry".
-- Plain shapes in GT5 wheels: the `Shadow` format has S1 positions (scale about bbox x 2, not exact; not visible geometry, open).
+- **S1 positions** (wheel/tire `Shadow` formats, some `Flex` tires): signed 16-bit fixed point, position = raw / 2^k
+  with k = 16 on most shapes, 15 or 13 on others (big tire templates). k is not in the shape or the FVF (two FVFs with
+  the same bytes have k 16 and 13); where it is stored is open (maybe a material constant). The decoder takes the k
+  (12..17) for which most axes match the v8 shape bbox size within 1% (some boxes are loose on one axis): 0 shapes out
+  of the box after that. GT6 has no shape bbox: k = 16 (9 GT6 shapes, tires/carparts). Tire 0134 (Schwimmwagen menu)
+  has a non power of two scale on Y and Z against its box: still inside it.
 
 ## Vertex formats (FVF, header 0x18 count, 0x40 offset) — verified
 
@@ -493,13 +501,28 @@ Stream 0x10: u32 0, u32 **offset in body_s**, u16 c1 header chunks, u16 c2 data 
   decoding it is item 4/5. Images: see `docs/txs3.md`.
 - PDTools reads a different streaming table (header 0xAC, 0 in every GT6 car file) and does not read images from `body_s`.
 
+### Item 4e: every car file through the shared decoder
+
+`gtdev mesh-check <files.tsv> <groupRegex> <out.txt>` decodes every shape of every file at every LOD level with
+`Mdl3Mesh.Decode` (the decoder of the exports) and checks finite positions, indices in range, triangles at LOD0 and
+positions inside the v8 shape bbox; +26 is compared per kind. Run over GT5 car hq/race/interior, wheel, tire and GT6
+car body/wheel/interior, carparts, tire (`tests\mesh_check`): about 900,000 shapes, **all decoded**.
+- Failures left: 3 GT5 race shapes (00800005 shapes 75 and 119: 1 vertex 1 mm outside the box; 00740016 shape 72:
+  1 index of 72 out of range at the last LOD level).
+- 19 files of MDL3 version 1-4 (14 GT5 interiors, 3 wheels, 2 tires, e.g. tire 0661) have another header layout and are
+  not read (open).
+- 2234 GT5 shape LOD levels > 0 without triangles: the part is dropped at that level (+26 is the LOD0 count).
+- +26 on GT6 PMSH shapes never equals the triangles (always lower): another meaning in v14 (open). GT5 packed +26 is
+  the triangles + 1 on most tire shapes (998 / 999) and higher on ~0.5% of car shapes (open, see 4c).
+
 ## Notes on PDTools (Nenkai)
 
 What our checks agree with: header names, model/shape layout, command opcodes, FVF and array layout.
 Differences and open points we found:
 - The command 8 reader looks wrong (reads `flag & 0xF` twice) but it is right: all 45,522 op8 in GT6 decode exactly.
 - Header 0x6C is read as an offset; in 8 GT5 files it is past the end of the file, so it is likely a size.
-- Shape triangles: only triangle lists are read, strips return null ("Tristrip - FIX ME").
+- Shape triangles: only triangle lists are read, strips return null ("Tristrip - FIX ME"); strips are shape flags
+  nibble 6 with restart index +20 (decoded here, 4e).
 - Packed meshes are read only for version >= 9 (GT6 `PMSH`). The GT5 packed reference (shape +0x2C, v8),
   used by most GT5 car body shapes, is not handled (decoded here, item 4).
 - `ReadPackedElement` starts reading at `PackedFlexVertCount` (a count used as an offset): to check against the data.

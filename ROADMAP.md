@@ -34,10 +34,14 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
   **GT6 bodies** decoded from the `body_s` bundles (`Mdl3BodyS`: PMSH and plain shape records): all 2454 bodies,
   267,778 blocks, 0 exceptions, 99.47% triangles agree with the normals. Normals of packed CMP declarations are the
   32-bit W of the position layout (was read from the 4-byte stream: 91% agreement); map34 shares map12's layout.
-  Demio body: 200/200 shapes, whole in the preview.
-  Left: user check of the Demio body in ZModeler (`tests\pmsh\demio_body`), 14 body + 3 interior blocks with unused
+  Demio body: 200/200 shapes, checked by the user in ZModeler (LOD0 whole, "everything in order").
+  Left: 14 body + 3 interior blocks with unused
   vertices, 11 flag 0x01 race blocks (position only, outside the box)
-- [ ] 4e. Check over every car file, 0 failures
+- [ ] 4e. Check over every car file (`gtdev mesh-check`, `tests\mesh_check`): about 900,000 shapes of GT5/GT6 car,
+  interior, wheel, tire and carparts files, **all decode** with the shared decoder. Found on the way: GT5 plain
+  triangle strips (shape flags nibble 6, restart +20), S1 shadow positions = raw / 2^k (k from the shape bbox; where
+  the game stores it is open), empty tire templates. Left: 3 GT5 race shapes (2 x 1 vertex 1 mm out, 1 index at the
+  last LOD), 19 files of MDL3 version 1-4 not read (other header).
 
 ## Next
 

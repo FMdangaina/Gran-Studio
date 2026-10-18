@@ -62,18 +62,45 @@ public sealed class Mdl3Mesh
             vertsAt = r.U32(sd.Record + 4);
             trisAt = r.U32(sd.Record + 8);
         }
-        if (vertsAt == 0 || trisAt == 0) { reason = "no vertex data in the file"; return null; }
+        if (sh.VertexCount == 0 && sh.TriLength == 0 && sh.TriCount == 0) { reason = "empty shape"; return null; }   // GT5 tire `*_side` templates
+        if (vertsAt == 0 || trisAt == 0) { reason = $"no vertex data in the file (fvf {m.Fvfs[sh.FvfIndex].Name}, v {sh.VertexCount} @{vertsAt:X}, tri length {sh.TriLength} @{trisAt:X}, +26 {sh.TriCount})"; return null; }
         var fvf = m.Fvfs[sh.FvfIndex];
         var pos = fvf["position"];
         if (pos is null) { reason = "no position"; return null; }
-        if (pos.Type != RsxVertexType.F) { reason = $"{pos.Type} positions"; return null; }
+        if (pos.Type is not (RsxVertexType.F or RsxVertexType.S1)) { reason = $"{pos.Type} positions"; return null; }
 
         int n = (int)sh.VertexCount;
         var mesh = new Mdl3Mesh { Positions = new Vector3[n] };
         for (int v = 0; v < n; v++)
         {
             int at = (int)(vertsAt + fvf.ElementOffset(pos, v));
-            mesh.Positions[v] = new Vector3(r.F32(at), r.F32(at + 4), r.F32(at + 8));
+            mesh.Positions[v] = pos.Type == RsxVertexType.F
+                ? new Vector3(r.F32(at), r.F32(at + 4), r.F32(at + 8))
+                : new Vector3(r.S16(at), r.S16(at + 2), pos.Count > 2 ? r.S16(at + 4) : 0);
+        }
+        if (pos.Type == RsxVertexType.S1)
+        {
+            // S1 (wheel/tire `Shadow` formats): signed 16-bit fixed point, raw / 2^k. k is 16 on most shapes, 13 on big
+            // tire templates; where it is stored is open (not in the shape or FVF; maybe the material). With a v8 shape
+            // bbox, k is the one whose result fits the bbox (exact); without one, 16.
+            float scale = 1f / 65536;
+            if (sh.BBoxOffset != 0 && n > 0)
+            {
+                var box = Enumerable.Range(0, 8).Select(i => new Vector3(m.Data.F32((int)sh.BBoxOffset + i * 12), m.Data.F32((int)sh.BBoxOffset + i * 12 + 4), m.Data.F32((int)sh.BBoxOffset + i * 12 + 8))).ToArray();
+                var boxSize = box.Aggregate(Vector3.Max) - box.Aggregate(Vector3.Min);
+                var rawSize = mesh.Positions.Aggregate(Vector3.Max) - mesh.Positions.Aggregate(Vector3.Min);
+                // the k for which most axes match the bbox size within 1% (some boxes are loose on one axis), 16 on a tie
+                int best = 16, bestHits = -1;
+                foreach (int k in new[] { 16, 15, 14, 13, 12, 17 })
+                {
+                    int hits = 0;
+                    for (int a = 0; a < 3; a++)
+                        if (boxSize[a] > 1e-4f && MathF.Abs(rawSize[a] / (1 << k) - boxSize[a]) <= 0.01f * boxSize[a] + 1e-4f) hits++;
+                    if (hits > bestHits) { best = k; bestHits = hits; }
+                }
+                scale = 1f / (1 << best);
+            }
+            for (int v = 0; v < n; v++) mesh.Positions[v] *= scale;
         }
         if (fvf["normal"] is { Type: RsxVertexType.CMP } nrm)
         {
@@ -90,11 +117,26 @@ public sealed class Mdl3Mesh
             }
         }
         var idx = new List<int>((int)sh.TriLength);
-        for (int i = 0; i + 2 < sh.TriLength; i += 3)
+        if ((sh.Flags & 0xF) == 6)
         {
-            int a = r.U16((int)trisAt + i * 2), b = r.U16((int)trisAt + i * 2 + 2), c = r.U16((int)trisAt + i * 2 + 4);
-            if (a < n && b < n && c < n) { idx.Add(a); idx.Add(b); idx.Add(c); }
+            // RSX TRIANGLE_STRIP (shape flags low nibble = primitive: 5 list, 6 strip), restart index at +20 (0xFFFF)
+            int k = 0;   // position in the current strip
+            for (int i = 0; i < sh.TriLength; i++, k++)
+            {
+                int c = r.U16((int)trisAt + i * 2);
+                if (c == (sh.Unk20 & 0xFFFF)) { k = -1; continue; }
+                if (k < 2) continue;
+                int a = r.U16((int)trisAt + (i - 2) * 2), b = r.U16((int)trisAt + (i - 1) * 2);
+                if (a == b || b == c || a == c || a >= n || b >= n || c >= n) continue;
+                if ((k & 1) == 0) { idx.Add(a); idx.Add(b); idx.Add(c); } else { idx.Add(b); idx.Add(a); idx.Add(c); }
+            }
         }
+        else
+            for (int i = 0; i + 2 < sh.TriLength; i += 3)
+            {
+                int a = r.U16((int)trisAt + i * 2), b = r.U16((int)trisAt + i * 2 + 2), c = r.U16((int)trisAt + i * 2 + 4);
+                if (a < n && b < n && c < n) { idx.Add(a); idx.Add(b); idx.Add(c); }
+            }
         mesh.Indices = [.. idx];
         return mesh;
     }
