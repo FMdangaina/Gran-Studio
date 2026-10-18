@@ -15,6 +15,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>granstudio.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

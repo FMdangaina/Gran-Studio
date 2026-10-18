@@ -27,6 +27,7 @@ public sealed class MainForm : Form
     public MainForm(string? file)
     {
         Text = "GTViewer";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);   // the exe icon (granstudio.ico) on the window too
         ClientSize = new Size(1400, 860);
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
