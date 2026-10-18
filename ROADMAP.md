@@ -11,8 +11,12 @@ Container known (3d: stream map, bundles, images), shape data decoded (4d). Expl
 are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
 against the game data) and the GT6 vs GT5 differences of the same car are written down. Findings in `docs/mdl3.md`.
 
-- [ ] 5a. `/` sub streams: count per car against the paint colours of the car (specdb), what changes between them
-  (BRDF images only, or also shapes / other images)
+- [ ] 5a. `/` sub streams (`gtdev bodys-subs`, all 2454 bodies): **colour variations**. Materials `..._CLR_VARI_k`
+  (GT6 only); `/` has 2 x (V + 1) sub streams, two halves, slot k = images of the `CLR_VARI_k` materials (12,802 of
+  13,461 non-empty slots; the rest = shared copies in half A and the last slots), last slot = `_PaintExtraBRDF`
+  materials (special paints). Half B = body paint, half A = soft top / roof / stripes / cabin colours (empty on 1891
+  bodies). No shapes, only images (mostly colour-shift BRDF).
+  Open: which paint colour picks which variation (GT6 database, encrypted SQLite), why two halves
 - [ ] 5b. `custom_*` groups (`custom_brake0`, `custom_caliper0`, `custom_a0`..`custom_f0`): which shapes and images each
   item holds, how the model selects a variant (switches), the part names they stand for
 - [ ] 5c. GT6 vs GT5 on the same car code (963 cars in both): models, shapes, LODs, materials, textures

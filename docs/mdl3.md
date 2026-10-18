@@ -501,6 +501,32 @@ Stream 0x10: u32 0, u32 **offset in body_s**, u16 c1 header chunks, u16 c2 data 
   decoding it is item 4/5. Images: see `docs/txs3.md`.
 - PDTools reads a different streaming table (header 0xAC, 0 in every GT6 car file) and does not read images from `body_s`.
 
+### Item 5a: the `/` sub streams = colour variations
+
+`gtdev bodys-subs <files.tsv> <groupRegex> <out.txt>` (all 2454 GT6 bodies, ~1 min, `tests\body_s_subs`; also a
+`.tsv` with one line per body) and `gtdev bodys-subs <body>` (one car: every sub stream, its images with a pixel hash and
+the materials that sample them).
+
+- GT6 materials that change with the car colour are named `<material>_CLR_VARI_<k>` (GT5 has no such names). V = the
+  number of variations (highest k + 1; k is contiguous except on 8 bodies).
+- The `/` item has always **2 x (V + 1)** sub streams (all 2035 bodies with CLR_VARI materials, except 17 with V = 1 and
+  no sub streams); 402 bodies without CLR_VARI have none. hq and race of the same car agree (1222 of 1227; 5 race
+  bodies have none).
+- The sub streams form two halves of V + 1 slots. Slot k (k < V) holds the images of the `_CLR_VARI_k` materials:
+  12,802 of 13,461 non-empty slots are sampled by `CLR_VARI_k` (alone in 10,779); the other 659 are 527 half A slots
+  holding copies of images of other variations and 132 half B slots, mostly the last slot (below). Images used by
+  several variations are copied into each slot (identical pixels, 3d).
+- **Half B** (second half) = exterior paint: `CBase*`, `CBaseEnv*`, `CDecal*`, `body*`, `pdiCgFlex*` materials, almost
+  only `ReflectColorShiftBRDF` / `ScatterColorShiftBRDF` images; one slot per variation, different in 1580 bodies.
+- **Half A** (first half) = second colour parts: empty on 1891 of 2035 bodies; used by soft tops (`HORO_TAG*` on the
+  Mazda Roadster 1989, 0001/0012 and 0001/0034), roof and stripes (`m_roof*`, `m_stripeA..C`), cabin leather, stitching,
+  seats and tags. Here the images are often the same in every slot (0012: the soft top image in all 4).
+- **The last slot** of each half (k = V) is empty on all but 90 bodies; there it holds the images of the
+  `..._CLR_VARI_k_PaintExtraBRDF` materials (60 only those, 30 mixed): the variant for the special paints.
+- The meaning of k (which paint colour of the car uses which variation) is in the GT6 database (`specdb\GT6\DB0106.dat`,
+  `database\gt6\menudb.dat`: encrypted SQLite, no reader yet). Variations are not the paint colours one by one: the
+  RX-8 (0001/0001) has V = 1 but several colours (the body colour itself is a material constant from the database).
+
 ### Item 4e: every car file through the shared decoder
 
 `gtdev mesh-check <files.tsv> <groupRegex> <out.txt>` decodes every shape of every file at every LOD level with
@@ -545,7 +571,9 @@ Differences and open points we found:
 - GT5 packed geometry: decoded (above). Open: segment +08 extra streams (geomorph?) and +0C block, H +0E, L flags,
   M Y, position format +08..+0B and +2E, the 0x40 record floats, p1/p2/p4/p5 tables (their link to p3), the shape +26 differences.
 - GT6 PMSH data: decoded (above). Open: 1-byte stream, +08 entries, flag 0x01, output count > V.
-- GT6 `body_s`: shape records decoded (above); the `/` sub streams and `custom_*` groups: item 5.
+- GT6 `body_s`: shape records decoded (above); `/` sub streams = colour variations (5a, above); `custom_*` groups: item 5b.
+  Open: which paint colour uses which variation (encrypted GT6 database), why two halves (half A = soft top / roof /
+  cabin colour parts, half B = body paint).
 - Small open fields (data is fully located, meaning unknown): material block byte +04 (no match with any count),
   0x78 n, 0xB0 +28..+2E, animation row +06, VM context +0A, header 0x7C, the u16s of the pass and of the SHDS +38/+3C records,
   FP header block and VP/FP microcode contents (RSX programs).
