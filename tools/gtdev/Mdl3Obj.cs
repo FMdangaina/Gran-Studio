@@ -28,15 +28,18 @@ static class Mdl3Obj
         if (args[0].EndsWith(".tsv", StringComparison.OrdinalIgnoreCase)) return Rank(args[0], args[1]);
         bool allModels = args.Contains("--all-models");
         var m = Mdl3File.Load(args[0]);
-        var shapes = SelectShapes(m, allModels);
-        int lods = LodCount(m, shapes);
+        var all = SelectShapes(m, allModels);
+        var scene = new Mdl3Scene(m, "");
+        int lods = Math.Max(LodCount(m, all), scene.Levels);
 
         string mtlName = Path.GetFileNameWithoutExtension(args[1]) + ".mtl";
         var usedMaterials = new SortedSet<int>();
         var log = new StringBuilder();
-        log.AppendLine($"{args[0]}: {m.Shapes.Count} shapes, {shapes.Count} exported models' shapes, {lods} LOD level(s)");
+        log.AppendLine($"{args[0]}: {m.Shapes.Count} shapes, {all.Count} exported models' shapes, {lods} LOD level(s); LOD0 shapes:");
         for (int lod = 0; lod < lods; lod++)
         {
+            // GT6: the op8 LOD selects pick one shape per level; GT5 packed shapes hold their levels inside
+            var shapes = all.Where(s => scene.AtLevel(s, lod)).ToList();
             string path = lod == 0 ? args[1] : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, $"{Path.GetFileNameWithoutExtension(args[1])}_lod{lod}.obj");
             int exported = Export(m, shapes, lod, path, mtlName, usedMaterials, lod == 0 ? log : null, out int skipped);
             Console.WriteLine($"lod{lod}: {exported} shapes exported, {skipped} skipped -> {path}");

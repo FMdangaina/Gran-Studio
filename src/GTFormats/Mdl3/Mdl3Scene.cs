@@ -18,8 +18,27 @@ public sealed class Mdl3Selector
     public int Default;                  // branch shown at load
 }
 
-/// <summary>One place where a model draws a shape, with the switch branches it sits in (all must hold).</summary>
-public sealed record Mdl3Draw(int Model, int Command, (int Selector, int[] Branches)[] Conditions);
+/// <summary>
+/// One place where a model draws a shape, with the switch branches it sits in (all must hold) and the LOD branches of
+/// the op8 LOD selects around it (Count = levels of that op8).
+/// </summary>
+public sealed record Mdl3Draw(int Model, int Command, (int Selector, int[] Branches)[] Conditions, (int Count, int[] Branches)[] Lods)
+{
+    /// <summary>
+    /// Drawn at a LOD level: the outer op8 takes branch min(level, its last); a nested op8 counts the level from the
+    /// start of the outer branch (whole-car LEVEL_1 > part LEVEL_0 = car LOD1). Outer first in <see cref="Lods"/>.
+    /// </summary>
+    public bool AtLevel(int level)
+    {
+        foreach (var q in Lods)
+        {
+            int b = Math.Min(Math.Max(level, 0), q.Count - 1);
+            if (!q.Branches.Contains(b)) return false;
+            level -= b;
+        }
+        return true;
+    }
+}
 
 /// <summary>Tree node: file, model, Maya group or shape (as drawn by one model).</summary>
 public sealed class Mdl3SceneNode
@@ -43,8 +62,10 @@ public sealed partial class Mdl3Scene
     public Mdl3SceneNode Root { get; } = new() { Kind = "file" };
     public List<Mdl3Selector> Selectors { get; } = [];
     public Dictionary<int, List<Mdl3Draw>> Draws { get; } = [];
-    public Dictionary<int, int> ShapeLevel { get; } = [];   // only shapes under a LEVEL_n node
-    public int Levels { get; }                              // LEVEL_n count (0 = none)
+    public Dictionary<int, int> ShapeLevel { get; } = [];   // shapes only drawn inside op8 LOD selects: first level drawn
+    public Dictionary<int, int> MayaLevel { get; } = [];    // shapes under a Maya LEVEL_n node (per-part numbering)
+    public int Levels { get; }                              // most op8 LOD branches (0 = no op8)
+    public int LodSelects { get; private set; }             // op8 count
     public List<string> Notes { get; } = [];                // structure oddities found while building
 
     [GeneratedRegex(@"^LEVEL_?(\d+)$")]
@@ -82,18 +103,24 @@ public sealed partial class Mdl3Scene
             var at = cmds.Select((c, k) => (c.Offset, k)).ToDictionary(x => x.Offset, x => x.k);
             // branch ranges of every switch command: [target, next target) and the last one up to the default jump target
             var ranges = new List<(Mdl3Selector sel, int branch, int from, int to)>();
+            var lodRanges = new List<(int op8, int count, int branch, int from, int to)>();
             for (int ci = 0; ci < cmds.Count; ci++)
             {
                 var c = cmds[ci];
-                if (c.Opcode is not (5 or 54)) continue;
-                int reg = m.Data.U16((int)model.CommandsOffset + c.Offset + 1);
-                if (!selectorOf.TryGetValue((c.Opcode, reg), out var sel))
+                if (c.Opcode is not (5 or 54 or 8) || c.Jumps.Length == 0) continue;
+                Mdl3Selector? sel = null;
+                if (c.Opcode != 8)
                 {
-                    sel = new Mdl3Selector { Id = Selectors.Count, Opcode = c.Opcode, Register = reg };
-                    Selectors.Add(sel);
-                    selectorOf[(c.Opcode, reg)] = sel;
+                    int reg = m.Data.U16((int)model.CommandsOffset + c.Offset + 1);
+                    if (!selectorOf.TryGetValue((c.Opcode, reg), out sel))
+                    {
+                        sel = new Mdl3Selector { Id = Selectors.Count, Opcode = c.Opcode, Register = reg };
+                        Selectors.Add(sel);
+                        selectorOf[(c.Opcode, reg)] = sel;
+                    }
+                    sel.Branches = Math.Max(sel.Branches, c.Jumps.Length);
                 }
-                sel.Branches = Math.Max(sel.Branches, c.Jumps.Length);
+                else LodSelects++;
                 int d = ci + 1;
                 while (d < cmds.Count - 1 && cmds[d].Opcode == 15) d++;   // some branches pop before their jump
                 int end;
@@ -108,25 +135,40 @@ public sealed partial class Mdl3Scene
                 }
                 var starts = c.Jumps.Distinct().Order().ToList();
                 for (int b = 0; b < c.Jumps.Length; b++)
-                    ranges.Add((sel, b, c.Jumps[b], starts.FirstOrDefault(x => x > c.Jumps[b], end)));
+                {
+                    int to = starts.FirstOrDefault(x => x > c.Jumps[b], end);
+                    if (sel != null) ranges.Add((sel, b, c.Jumps[b], to));
+                    else lodRanges.Add((ci, c.Jumps.Length, b, c.Jumps[b], to));
+                }
             }
             foreach (var c in cmds.Select((c, k) => (c, k)).Where(x => x.c.Shapes.Length > 0))
             {
                 var cond = ranges.Where(r => c.c.Offset >= r.from && c.c.Offset < r.to)
                     .GroupBy(r => r.sel.Id).Select(g => (g.Key, g.Select(r => r.branch).Distinct().Order().ToArray())).ToArray();
+                var lods = lodRanges.Where(r => c.c.Offset >= r.from && c.c.Offset < r.to)
+                    .GroupBy(r => r.op8).Select(g => (g.First().count, g.Select(r => r.branch).Distinct().Order().ToArray())).ToArray();
                 foreach (int s in c.c.Shapes)
                 {
                     if (!Draws.TryGetValue(s, out var l)) Draws[s] = l = [];
-                    l.Add(new Mdl3Draw(mi, c.k, cond));
+                    l.Add(new Mdl3Draw(mi, c.k, cond, lods));
                 }
             }
         }
 
-        // LOD level of a shape: its LEVEL_n Maya node
+        // LOD levels: the op8 LOD selects of the command streams (GT6), the most branches of any op8
+        Levels = Draws.Values.SelectMany(l => l).SelectMany(d => d.Lods).Select(q => q.Count).DefaultIfEmpty(0).Max();
+        // nested op8 (whole-car levels around part levels, 56 GT6 bodies): a branch pair no single level reaches is noted
+        foreach (var (s, l) in Draws)
+            if (l.All(d => d.Lods.Length > 0))
+            {
+                int k = Enumerable.Range(0, Levels).FirstOrDefault(k => l.Any(d => d.AtLevel(k)), -1);
+                if (k < 0) Notes.Add($"shape {s}: nested op8 branches {string.Join(" / ", l.Select(d => string.Join("+", d.Lods.Select(q => $"{string.Join(",", q.Branches)} of {q.Count}"))))} drawn at no LOD level");
+                ShapeLevel[s] = Math.Max(k, 0);
+            }
+        // Maya LEVEL_n nodes: names only (numbered per part, not one level for the whole car)
         foreach (var (s, names) in m.ShapeNames)
             foreach (var node in names[0].Split('|'))
-                if (LevelNode().Match(node) is { Success: true } lm) { ShapeLevel[s] = int.Parse(lm.Groups[1].Value); break; }
-        Levels = ShapeLevel.Count == 0 ? 0 : ShapeLevel.Values.Max() + 1;
+                if (LevelNode().Match(node) is { Success: true } lm) { MayaLevel[s] = int.Parse(lm.Groups[1].Value); break; }
 
         NameSelectors(m);
         BuildTree(m);
@@ -189,9 +231,13 @@ public sealed partial class Mdl3Scene
             foreach (int mi in draws.Select(d => d.Model).Distinct())
             {
                 var parent = models[mi];
-                string path = m.ShapeNames.TryGetValue(s, out var n) ? n[0] : $"shape{s}";
-                var raw = path.Split('|', StringSplitOptions.RemoveEmptyEntries);
-                var nodes = ShapeNaming.Nodes(string.Join('|', raw.Take(Math.Max(1, raw.Length - 2))));
+                List<string> nodes;
+                if (m.ShapeNames.TryGetValue(s, out var n))
+                {
+                    var raw = n[0].Split('|', StringSplitOptions.RemoveEmptyEntries);
+                    nodes = ShapeNaming.Nodes(string.Join('|', raw.Take(Math.Max(1, raw.Length - 2))));
+                }
+                else nodes = ["(no Maya name)", "material " + (ShapeNaming.MaterialWord(m, s, true) ?? "none")];   // grouped by material
                 // the first node usually repeats the model (GTBE_BODY -> BODY): skip it then
                 if (nodes.Count > 0 && ShapeNaming.Clean(parent.Name).Equals(nodes[0], StringComparison.OrdinalIgnoreCase)) nodes.RemoveAt(0);
                 string key = "";
@@ -220,10 +266,10 @@ public sealed partial class Mdl3Scene
     }
 
     /// <summary>Is the shape drawn by this model in the given switch state (selector id -> branch)?</summary>
-    public bool IsDrawn(int model, int shape, IReadOnlyDictionary<int, int> state) =>
-        Draws.TryGetValue(shape, out var l) && l.Any(d => d.Model == model &&
+    public bool IsDrawn(int model, int shape, IReadOnlyDictionary<int, int> state, int level = 0) =>
+        Draws.TryGetValue(shape, out var l) && l.Any(d => d.Model == model && d.AtLevel(level) &&
             d.Conditions.All(q => q.Branches.Contains(state.TryGetValue(q.Selector, out int b) ? b : Selectors[q.Selector].Default)));
 
-    /// <summary>Is the shape shown at this LOD level (shapes without a LEVEL_n node are shown at every level)?</summary>
-    public bool AtLevel(int shape, int level) => !ShapeLevel.TryGetValue(shape, out int l) || l == level;
+    /// <summary>Is the shape drawn at this LOD level by any model (shapes outside op8 LOD selects: at every level)?</summary>
+    public bool AtLevel(int shape, int level) => !Draws.TryGetValue(shape, out var l) || l.Any(d => d.AtLevel(level));
 }

@@ -81,6 +81,17 @@ one model**. So the command stream is the complete model -> shape map.
 - `op5 <u16 value> <u8 n> <n x u16 rel>` is a switch; `op9`/`op10` relative jumps (relative to the end of the operand).
 - In car 00010007 the switches choose between day/night shapes (`GT_DAYTIME` / `GT_NIGHT`), brake lights on, retractable headlights open/closed.
 - The command 8 reader in PDTools reads `flag & 0xF` twice (floats, then shorts); it looks like a bug, but the data agrees: all 45,522 op8 in GT6 decode exactly.
+- **op8 = LOD select** (2026-10-18; the PS2 `LODSelect` of PDTools has the same shape): 16 bytes (3 floats + 1.0,
+  always 0,0,0,1 in cars), flag (`& 0x0F` = level count n; 0x80: optional u32 (0x40), u16 (0x20), u8 (0x10), then n
+  floats + 1 byte), then n u16 jumps relative to the end of their own entry (as op5). The op9 right after the table is
+  the default branch (nothing drawn); each branch ends with an op9 to the end. Branch 0 = most detail. The floats go
+  down to 0 (`10 0`, `10 5 0`, `75 50 25 0`, `67 34`): a quality / screen size threshold, not metres (open).
+  GT6: 45,592 op8, every jump on a command (`mdl3-models`); levels per body 1-4 (one race body 10); 1-level op8 =
+  the part is only drawn close. Nested op8: whole-car `LOD_STD_BODY` (3 levels) around part LODs (2 levels), the inner
+  one almost always at branch 0 (2514 of 2538 draws): the viewer counts the inner level from the outer branch.
+  GT5 has 20 op8 (race files); its levels are inside the packed shapes.
+  Maya `LEVEL_n` nodes are numbered per part and are not always in game order (`LEVEL_1` = `SS_model_CLOSED` = branch 2):
+  the op8 branch is the level.
 
 Opcodes used by cars: v8 `0 5 6 8 9 10 14 15 17 18 37 44 51 53 59 60 62 70 71`; v14 adds `4 54 61`.
 

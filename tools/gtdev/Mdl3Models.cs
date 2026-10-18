@@ -82,7 +82,7 @@ static class Mdl3Models
             w.WriteLine($"== model {i} {f.ModelNames.GetValueOrDefault(i)}  r={m.Radius:0.###} c={m.Center}  flags {m.Flags:X4} unk2C {m.Unk2C:X4} vm {m.VmInit}/{m.VmUpdate}/{m.VmUnk}");
             foreach (var c in m.Commands)
             {
-                w.WriteLine("   " + c);
+                w.WriteLine("   " + c + (c.Opcode == 8 ? "  " + Convert.ToHexString(f.Data.Data, (int)m.CommandsOffset + c.Offset, c.Length) : ""));
                 foreach (var s in c.Shapes)
                 {
                     var sh = s < f.Shapes.Count ? f.Shapes[s] : null;

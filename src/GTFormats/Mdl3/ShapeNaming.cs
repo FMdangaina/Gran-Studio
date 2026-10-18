@@ -64,7 +64,9 @@ public static partial class ShapeNaming
     /// </summary>
     public static string Short(Mdl3File m, int shape)
     {
-        string path = m.ShapeNames.TryGetValue(shape, out var n) ? n[0] : $"shape{shape}";
+        // no Maya path in the file (GT6 premium bodies: about half the shapes): the material name, when it says something
+        if (!m.ShapeNames.ContainsKey(shape)) return $"{MaterialWord(m, shape) ?? "shape"}.s{shape}";
+        string path = m.ShapeNames[shape][0];
         var nodes = Nodes(path);
         if (nodes.Count <= 1)
         {
@@ -79,5 +81,23 @@ public static partial class ShapeNaming
         string name = string.Join('.', parts);
         if (name.Length > 56) name = name[..56];
         return $"{name}.s{shape}";
+    }
+
+    [GeneratedRegex(@"^(pdiCg\w*?|lambert|blinn|phong|initialShadingGroup|material|mat)\d*$", RegexOptions.IgnoreCase)]
+    private static partial Regex MaterialDefault();
+
+    /// <summary>
+    /// The material name of a shape as a word (namespace, `_CLR_VARI_k` paint variation and FVF suffix removed), null
+    /// when it is a Maya default (pdiCgFlex45, lambert2).
+    /// </summary>
+    public static string? MaterialWord(Mdl3File m, int shape, bool keepDefault = false)
+    {
+        int mat = m.Shapes[shape].MaterialIndex;
+        if (mat < 0 || mat >= m.Materials.Count) return null;
+        string n = m.Materials[mat].Name.Split(' ')[0];
+        if (n.Contains(':')) n = n[(n.LastIndexOf(':') + 1)..];
+        n = Regex.Replace(n, @"_CLR_VARI_\d+$", "");
+        n = new string([.. n.Select(c => char.IsLetterOrDigit(c) || c == '_' ? c : '_')]).Trim('_');
+        return n.Length == 0 || !keepDefault && MaterialDefault().IsMatch(n) ? null : n;
     }
 }

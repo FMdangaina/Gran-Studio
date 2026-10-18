@@ -16,14 +16,15 @@ static class Mdl3Gltf
         if (args.Length < 2) { Console.Error.WriteLine("mdl3-gltf <file> <out.gltf> [--all-models]"); return 1; }
         var m = Mdl3File.Load(args[0]);
         var shapes = Mdl3Obj.SelectShapes(m, args.Contains("--all-models"));
-        int lods = Mdl3Obj.LodCount(m, shapes);
+        var scene = new Mdl3Scene(m, "");
+        int lods = Math.Max(Mdl3Obj.LodCount(m, shapes), scene.Levels);
         string dir = Path.GetDirectoryName(Path.GetFullPath(args[1]))!, stem = Path.GetFileNameWithoutExtension(args[1]);
         var materials = shapes.Select(s => (int)m.Shapes[s].MaterialIndex).Where(i => i >= 0).Distinct().Order().ToList();
         var textures = Mdl3Obj.MaterialTextures(m, materials, dir, stem);
         for (int lod = 0; lod < lods; lod++)
         {
             string name = lod == 0 ? stem : $"{stem}_lod{lod}";
-            int n = Write(m, shapes, lod, materials, textures, Path.Combine(dir, name + ".gltf"), name + ".bin", Path.GetFileName(args[0]), out int skipped);
+            int n = Write(m, shapes.Where(s => scene.AtLevel(s, lod)).ToList(), lod, materials, textures, Path.Combine(dir, name + ".gltf"), name + ".bin", Path.GetFileName(args[0]), out int skipped);
             Console.WriteLine($"lod{lod}: {n} shapes, {skipped} skipped -> {Path.Combine(dir, name + ".gltf")}");
         }
         return 0;

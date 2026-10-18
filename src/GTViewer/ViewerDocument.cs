@@ -36,7 +36,7 @@ public sealed class ViewerDocument : IDisposable
         Scene = new Mdl3Scene(File, System.IO.Path.GetFileName(path));
         foreach (var s in Scene.Selectors) State[s.Id] = s.Default;
         foreach (var n in Scene.Root.Children.Where(n => n.Kind == "model" && (n.Model < 0 || !Scene.DefaultOn(n.Model)))) Hidden.Add(n);
-        // LOD levels: GT6 LEVEL_n nodes, GT5 packed levels inside the shapes
+        // LOD levels: GT6 op8 LOD selects (one shape per level), GT5 packed levels inside the shapes
         int packed = 1;
         for (int s = 0; s < File.Shapes.Count; s++)
             try { packed = Math.Max(packed, Mdl3Mesh.LodCount(File, s)); } catch { }
@@ -52,12 +52,11 @@ public sealed class ViewerDocument : IDisposable
 
     /// <summary>Shape nodes drawn with the current visibility, switch state and LOD level.</summary>
     public IEnumerable<Mdl3SceneNode> VisibleShapes() =>
-        Scene.Root.All().Where(n => n.Kind == "shape" && IsShown(n) && Scene.AtLevel(n.Shape, Lod)
-            && (n.Model < 0 || Scene.IsDrawn(n.Model, n.Shape, State)));
+        Scene.Root.All().Where(n => n.Kind == "shape" && IsShown(n) && (n.Model < 0 || Scene.IsDrawn(n.Model, n.Shape, State, Lod)));
 
     public GpuMesh? Mesh(int shape, out string? failure)
     {
-        int lod = Scene.ShapeLevel.ContainsKey(shape) ? 0 : Lod;   // LEVEL_n shapes are one level each
+        int lod = Scene.ShapeLevel.ContainsKey(shape) ? 0 : Lod;   // shapes inside op8 are one level each
         failure = null;
         if (meshes.TryGetValue((shape, lod), out var m)) { failures.TryGetValue((shape, lod), out failure); return m; }
         try
@@ -123,6 +122,9 @@ public sealed class ViewerDocument : IDisposable
         }
         return (info.ImageIndex, rgba, img.Width, img.Height);
     }
+
+    /// <summary>Triangles drawn with the current visibility, switches and LOD level (a shape drawn by two models once).</summary>
+    public int VisibleTriangles() => VisibleShapes().Select(n => n.Shape).Distinct().Sum(s => (Mesh(s, out _)?.IndexCount ?? 0) / 3);
 
     /// <summary>The decoded triangles of a shape at the current LOD level (for export).</summary>
     public Mdl3Mesh? DecodeForExport(int shape)

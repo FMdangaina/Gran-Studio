@@ -6,7 +6,7 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-(empty: the user picks the next item; proposal: 7, materials and textures for display)
+(empty: the user picks the next item)
 
 ## Next
 
@@ -185,3 +185,21 @@ and finds the tree and the 3D view right.
 Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
 OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
 material name per shape (later).
+
+- **10. LOD levels** (closed by the user 2026-10-18; request from the AEM S2000 GT6 race body) — "confusion with the LODs, I need to
+  extract them too": the viewer drew the high and low shapes of GT6 premium bodies on top of each other, the LOD
+  picker listed 14 levels from Maya `LEVEL_n` nodes (numbered per part), half the shapes were named `shapeNN`.
+  - a. model command **op8 = LOD select** (PS2 `LODSelect` in PDTools): one distance per level and one u16 jump per
+    level (as op5), the op9 after it = nothing drawn. All 45,592 GT6 op8 jumps land on a command (`mdl3-models`).
+    Done: `Mdl3Command.LodDistances`, `Mdl3Draw.Lods`, `Mdl3Scene.Levels` = op8 levels; LOD k = branch k of every op8
+    (clamped to its last); nested op8 (whole-car `LOD_STD_BODY` around part LODs) count from the outer branch: 13
+    shapes in 2454 bodies reach no level. Maya `LEVEL_n` agrees with the op8 branch on 47,000 of 51,500 shapes; the
+    others are Maya order, not game order (0001/0012: `LEVEL_2` = branch 1).
+  - b. viewer: LOD picker from op8, triangles of the shown level in the status bar, tree labels `LOD0` / `LOD1-2`,
+    **File > Export visible, all LOD levels to OBJ** (Ctrl+Shift+E: `name_lodN.obj`); `gtdev mdl3-obj` / `mdl3-gltf`
+    split GT6 levels too. S2000 race: LOD0 130,279 triangles, LOD1 47,516 (before: both drawn, ~178k).
+  - c. shapes without a Maya path (GT6 premium bodies): named and grouped by material (`black.s0`, `carbon_dart1.s14`),
+    `(no Maya name)` group; Maya default materials (`pdiCgFlex45`) keep `shape.sN`.
+  Count per file (`mdl3-scene` survey): GT5 race 199 files with 5 levels + 33 with 6 (likely premium), 853 with 1;
+  GT6 race body 515 with 2, 48 with 3, 660 with 1 (same 787B: GT5 5 levels, GT6 2). GT5 levels = same vertices, fewer
+  triangles; GT6 levels = separate meshes. Idea for later: GT5 race levels as low LODs of GT6 cars (check fit first).

@@ -11,6 +11,7 @@ public sealed class Mdl3Command
     public int Length;          // opcode + operands
     public int[] Shapes = [];   // shape indices this command draws
     public int[] Jumps = [];    // absolute stream offsets this command can jump to
+    public float[] LodDistances = [];   // op8: one distance per LOD level
 
     public override string ToString() =>
         $"{Offset:X4} op{Opcode}" + (Shapes.Length > 0 ? $" shapes {string.Join(",", Shapes)}" : "") +
@@ -52,16 +53,23 @@ public sealed class Mdl3Command
                 }
                 case 8:
                 {
+                    // LOD select: 16 bytes (sphere?), flag (0x0F = level count), optional fields, one distance per
+                    // level, then one u16 jump per level (relative to the end of its own entry, as op5); the op9
+                    // right after is the default (nothing drawn)
                     q += 16;
                     int flag = r.U8(q); q += 1;
+                    int n = flag & 0x0F;
                     if ((flag & 0x80) != 0)
                     {
                         if ((flag & 0x40) != 0) q += 4;
                         if ((flag & 0x20) != 0) q += 2;
                         if ((flag & 0x10) != 0) q += 1;
-                        q += (flag & 0x0F) * 4 + 1;
+                        c.LodDistances = new float[n];
+                        for (int i = 0; i < n; i++, q += 4) c.LodDistances[i] = r.F32(q);
+                        q += 1;
                     }
-                    q += (flag & 0x0F) * 2;
+                    c.Jumps = new int[n];
+                    for (int i = 0; i < n; i++, q += 2) c.Jumps[i] = q + 2 - start + r.U16(q);
                     break;
                 }
                 default:

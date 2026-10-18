@@ -40,6 +40,7 @@ public sealed class MainForm : Form
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("Open &game folder (car list by name)...", null, (_, _) => OpenGameFolder()) { ShortcutKeys = Keys.Control | Keys.G });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Open file...", null, (_, _) => OpenDialog()) { ShortcutKeys = Keys.Control | Keys.O });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Export visible to OBJ...", null, (_, _) => ExportObj()) { ShortcutKeys = Keys.Control | Keys.E });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export visible, &all LOD levels to OBJ...", null, (_, _) => ExportObj(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.E });
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("E&xit", null, (_, _) => Close()));
         var viewMenu = new ToolStripMenuItem("&View");
@@ -182,7 +183,14 @@ public sealed class MainForm : Form
         FillTree();
         FillSwitches();
         FrameAll();
-        status.Text = $"{doc.File.Models.Count} models, {doc.File.Shapes.Count} shapes, {doc.Scene.Selectors.Count} switches, {doc.LodCount} LOD level(s){(renderer.Software ? " - software rendering" : "")}";
+        UpdateStatus();
+    }
+
+    void UpdateStatus()
+    {
+        if (doc == null) return;
+        status.Text = $"{doc.File.Models.Count} models, {doc.File.Shapes.Count} shapes, {doc.Scene.Selectors.Count} switches, " +
+            $"{doc.LodCount} LOD level(s), showing LOD{doc.Lod}: {doc.VisibleTriangles():N0} triangles{(renderer.Software ? " - software rendering" : "")}";
     }
 
     void FillTree()
@@ -212,7 +220,10 @@ public sealed class MainForm : Form
         // switched shapes: the switch options they belong to
         var conds = doc!.Scene.Draws[n.Shape].Where(d => d.Model == n.Model).SelectMany(d => d.Conditions)
             .Select(q => $"{Short(doc.Scene.Selectors[q.Selector])} {string.Join(",", q.Branches)}").Distinct().ToList();
-        string lod = doc.Scene.ShapeLevel.TryGetValue(n.Shape, out int l) ? $" LOD{l}" : "";
+        // inside op8 LOD selects: the levels it is drawn at
+        var levels = Enumerable.Range(0, doc.Scene.Levels).Where(k => doc.Scene.Draws[n.Shape].Any(d => d.Model == n.Model && d.Lods.Length > 0 && d.AtLevel(k))).ToList();
+        string lod = levels.Count == 0 || levels.Count == doc.Scene.Levels && doc.Scene.Draws[n.Shape].Any(d => d.Model == n.Model && d.Lods.Length == 0) ? ""
+            : levels.Count == 1 ? $" LOD{levels[0]}" : levels.Zip(levels.Skip(1)).All(p => p.Second == p.First + 1) ? $" LOD{levels[0]}-{levels[^1]}" : $" LOD{string.Join(",", levels)}";
         return conds.Count == 0 ? n.Name + lod : $"{n.Name}{lod}  [{string.Join("; ", conds)}]";
     }
 
@@ -248,9 +259,9 @@ public sealed class MainForm : Form
         {
             switches.Controls.Add(new Label { Text = "LOD level", AutoSize = true, Margin = new Padding(3, 6, 3, 0) });
             var lod = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = width };
-            for (int i = 0; i < doc.LodCount; i++) lod.Items.Add($"LOD{i}");
+            for (int i = 0; i < doc.LodCount; i++) lod.Items.Add(i == 0 ? "LOD0 (most detail)" : i == doc.LodCount - 1 ? $"LOD{i} (least detail)" : $"LOD{i}");
             lod.SelectedIndex = doc.Lod;
-            lod.SelectedIndexChanged += (_, _) => { doc.Lod = lod.SelectedIndex; UpdateTreeColors(); view.Invalidate(); };
+            lod.SelectedIndexChanged += (_, _) => { doc.Lod = lod.SelectedIndex; UpdateTreeColors(); UpdateStatus(); view.Invalidate(); };
             switches.Controls.Add(lod);
         }
         // custom parts first, then the state switches
@@ -336,16 +347,38 @@ public sealed class MainForm : Form
         renderer.Present();
     }
 
-    void ExportObj()
+    void ExportObj(bool allLods = false)
     {
         if (doc == null) return;
-        using var dlg = new SaveFileDialog { Title = "Export the visible shapes to OBJ", Filter = "Wavefront OBJ|*.obj", FileName = Path.GetFileName(doc.Path) + ".obj" };
+        string stem = Path.GetFileName(doc.Path);
+        using var dlg = new SaveFileDialog
+        {
+            Title = allLods ? $"Export the visible shapes of all {doc.LodCount} LOD levels to OBJ (one file per level: name_lodN.obj)" : "Export the visible shapes to OBJ",
+            Filter = "Wavefront OBJ|*.obj",
+            FileName = stem + ".obj",
+        };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            int n = ObjExport.Write(doc, dlg.FileName);
-            status.Text = $"{n} shapes exported to {dlg.FileName}";
+            if (!allLods)
+            {
+                int n = ObjExport.Write(doc, dlg.FileName);
+                status.Text = $"{n} shapes exported to {dlg.FileName} (LOD{doc.Lod})";
+                return;
+            }
+            Cursor = Cursors.WaitCursor;
+            int keep = doc.Lod;
+            string dir = Path.GetDirectoryName(dlg.FileName)!, name = Path.GetFileNameWithoutExtension(dlg.FileName);
+            var counts = new List<string>();
+            for (int k = 0; k < doc.LodCount; k++)
+            {
+                doc.Lod = k;
+                counts.Add($"LOD{k} {ObjExport.Write(doc, Path.Combine(dir, $"{name}_lod{k}.obj"))}");
+            }
+            doc.Lod = keep;
+            status.Text = $"{doc.LodCount} LOD levels exported to {Path.Combine(dir, name)}_lodN.obj (shapes: {string.Join(", ", counts)})";
         }
         catch (Exception e) { MessageBox.Show(this, e.Message, "Export failed", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally { Cursor = Cursors.Default; }
     }
 }

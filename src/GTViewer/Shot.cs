@@ -58,7 +58,7 @@ static class Shot
         File.WriteAllLines(System.IO.Path.ChangeExtension(output, ".txt"),
         [
             $"{file}: {(renderer.Software ? "WARP (software)" : "hardware")} device, {w}x{h}, LOD {lod}/{doc.LodCount}",
-            $"visible shape nodes {shapes.Count}, drawn {items.Count}, without mesh {failed}, textured {items.Count(i => i.Texture != null)}",
+            $"visible shape nodes {shapes.Count}, drawn {items.Count}, without mesh {failed}, textured {items.Count(i => i.Texture != null)}, triangles {doc.VisibleTriangles()}",
             $"box {min} .. {max}",
             .. doc.Scene.Selectors.Select(s => $"switch [{s.Id}] {s.Name} = {doc.State[s.Id]}"),
             .. shapes.Select(n => (n, f: doc.Mesh(n.Shape, out var why) == null ? why : null)).Where(x => x.f != null).Select(x => $"no mesh: s{x.n.Shape} {x.n.Name}: {x.f}"),
