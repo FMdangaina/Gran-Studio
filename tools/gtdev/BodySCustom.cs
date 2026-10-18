@@ -66,9 +66,18 @@ static class BodySCustom
                         int at = (int)m.Models[mi].CommandsOffset + op.Offset;
                         int value = m.Data.U16(at + 1), n = op.Jumps.Length;
                         // default = the command right after the op54 (op9 to the end)
-                        var after = cmds[ci + 1];
+                        // (in some files every branch, the default too, starts with an op15 pop before its op9)
+                        int ai = ci + 1;
+                        while (ai < cmds.Count - 1 && cmds[ai].Opcode == 15) ai++;
+                        if (ai > ci + 1) Count("op54 default branch starts with op15 (pop) before the jump", $"{car} model {mi} @{op.Offset:X}");
+                        var after = cmds[ai];
                         int end = after.Opcode is 9 or 10 ? after.Jumps[0] : -1;
-                        if (end < 0) { Count("op54 not followed by a jump", $"{car} model {mi}"); continue; }
+                        if (end < 0)
+                        {
+                            Count("op54 not followed by a jump", $"{car} model {mi} @{op.Offset:X} next op{after.Opcode} value 0x{value:X} n {n}");
+                            if (verbose) Console.WriteLine($"model {mi} @{op.Offset:X4} op54 value 0x{value:X} n {n} jumps {string.Join(",", op.Jumps.Select(j => j.ToString("X4")))} next op{after.Opcode} @{after.Offset:X4}");
+                            continue;
+                        }
                         var starts = op.Jumps.Distinct().Order().ToList();
                         var branch = new List<HashSet<int>>();
                         foreach (int t in op.Jumps)
@@ -106,6 +115,7 @@ static class BodySCustom
                     {
                         Count(u.All(b => b.All(s => items["/"].Count > 0 && items["/"][0].Contains(s))) ? "op54 value without custom group: draws only '/' shapes"
                             : "op54 value: NO custom group fits", $"{car} value 0x{value:X} n {u.Count}");
+                        if (verbose) Console.WriteLine($"NO FIT value 0x{value:X}: " + string.Join(" | ", u.Select((x, i) => $"{i}: {string.Join(" ", x.Order().Select(s => "s" + s))}")));
                         continue;
                     }
                     bases.Add(value - best);
@@ -130,6 +140,31 @@ static class BodySCustom
                 }).ToHashSet();
                 Count(hostCustom.SetEquals(expected) ? "host registers customN = groups (a..f = 0..5, brake 10, caliper 11)"
                     : $"host registers customN differ from the groups", hostCustom.SetEquals(expected) ? null : $"{car} host {string.Join(",", hostCustom.Order())} groups {string.Join(",", expected.Order())}");
+                // register = base + rank of the part among ALL the car's custom parts (host registers customN, also those
+                // without a body_s group), parts sorted by group name: a, b, brake, c, caliper, d, e, f
+                static string Part(string host) => int.Parse(host[6..]) switch { 10 => "brake", 11 => "caliper", var k => ((char)('a' + k)).ToString() };
+                var ranked = hostCustom.Select(Part).Order(StringComparer.Ordinal).ToList();
+                var bases2 = new HashSet<int>();
+                foreach (var (value, u) in union)
+                {
+                    var g = map.Groups.Skip(1).FirstOrDefault(gg => Enumerable.Range(0, Math.Min(u.Count, gg.Items.Count)).Any(i => items[gg.Name][i].Count > 0)
+                        && Enumerable.Range(0, gg.Items.Count).All(i => items[gg.Name][i].Count == 0 || i < u.Count && items[gg.Name][i].IsSubsetOf(u[i])));
+                    if (g == null) continue;
+                    int rank = ranked.IndexOf(Regex.Match(g.Name, @"^custom_(\w+?)\d*$").Groups[1].Value);
+                    if (rank < 0) { Count("group without a host register", $"{car} {g.Name}"); continue; }
+                    bases2.Add(value - rank);
+                }
+                if (bases2.Count == 1)
+                {
+                    var outs = m.Keys(0x22, 0x5C).Select(k => (int)(k.index & 0xFFFF) + (int)(k.index >> 16)).ToList();
+                    int hostN = m.Keys(0x1E, 0x58).Count();
+                    int b0 = bases2.First();
+                    Count(outs.Count > 0 ? (b0 == outs.Max() ? "base = end of the vm outputs (last index + its size)" : $"base != end of vm outputs ({b0 - outs.Max():+0;-0})")
+                        : $"no vm outputs: base - host register count = {b0 - hostN}", $"{car} base {b0}");
+                }
+                if (bases2.Count > 0) Count(bases2.Count == 1 ? "value - rank among host custom parts: one constant per file" : "value - rank among host custom parts: SEVERAL", $"{car} {string.Join(",", bases2)}");
+                foreach (var h in hostCustom.Select(Part).Where(p => !map.Groups.Any(gg => gg.Name.StartsWith("custom_" + p) && Regex.IsMatch(gg.Name[(7 + p.Length)..], @"^\d*$"))))
+                    Count($"host register without a body_s group: part {h}", car);
                 if (bases.Count > 0) Count(bases.Count == 1 ? "value - group index: one constant per file" : "value - group index: SEVERAL constants", $"{car} {string.Join(",", bases)}");
                 foreach (var g in map.Groups.Where(g => g.Name != "/"))
                 {

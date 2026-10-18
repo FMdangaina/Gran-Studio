@@ -538,17 +538,20 @@ the materials that sample them).
   car: 2438 / 2448 bodies). Item k = option k; item 0 is often empty (the part off / the standard part in `/`).
 - **op54** (v14 only) `<u16 register> <u8 n> <n x u16 rel>` is the switch that draws them: like op5, each rel is
   relative to the end of its own entry, the op9 right after the entries is the default (jump to the end), each
-  branch ends with an op9 to the end. The branches of all op54 with the same register (over all models: body,
-  self-shadow, shadow box) together draw **exactly** the shapes of item k of one group: 18,039 of 18,039 items.
-  One op54 draws only a few shapes (one place in the scene), so a group is spread over many op54.
-- The register is a VM register: one per group, constant offset from the group index in 2130 bodies (base 0x20 on
-  0001/0012, 21 on 0001/0095, 6 on 0001/0001; 324 bodies have another order). The game sets it from the host
-  registers `custom0`..`custom5` (a..f), `custom10` (brake), `custom11` (caliper): these names match the groups in
-  2065 bodies; in the others there is a host register for a part with no `body_s` group.
+  branch ends with an op9 to the end. In 25 op54 (0002/0025 race...) every branch, the default too, starts with an
+  op15 (pop) before its op9. The branches of all op54 with the same register (over all models: body, self-shadow,
+  shadow box) together draw **exactly** the shapes of item k of one group: **18,119 of 18,119 items**, every
+  register belongs to a group, every group with shapes is switched. One op54 draws only a few shapes (one place in
+  the scene), so a group is spread over many op54.
+- The register is a VM register: **register = base + rank of the part** among all the custom parts of the car, sorted
+  by name (a, b, brake, c, caliper, d, e, f), on 2454 of 2454 bodies. The parts of the car are its host registers
+  `custom0`..`custom5` (a..f), `custom10` (brake), `custom11` (caliper), which the game sets; a part can have a host
+  register but no `body_s` group (416 cases, mostly `c` = wing kept in `/`, 324), and it still takes its rank.
+  The base is the first register after the VM's own ones: = the end of the VM outputs (last index + size) on all
+  786 bodies that have outputs (0x21 on 0001/0012, 22 on 0001/0095); without outputs it is after the VM locals
+  (mostly 7, 0 on a few cars), from the VM bytecode (not derived here).
 - Custom items can have sub streams too (70 items: mostly wings `custom_c`, also `custom_d`, `custom_e`, calipers):
   always the same count as the `/` item and only images, i.e. the colour variations of 5a for the option parts.
-- Open: 25 op54 without the default op9 (0002/0025 race...), 20 registers whose branches fit no group, 23 groups never
-  switched (all in those bodies).
 
 ### Item 5c: the same car in GT5 and GT6
 

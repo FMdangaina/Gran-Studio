@@ -6,34 +6,30 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-### 5. GT6 `body_s`
-Container known (3d: stream map, bundles, images), shape data decoded (4d). Explain what the parts of the stream map
-are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
-against the game data) and the GT6 vs GT5 differences of the same car are written down. Findings in `docs/mdl3.md`.
+### 6. Viewer
+Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model hierarchy
+(models, Maya groups, shapes, switch variants, custom parts, LODs) next to the 3D view, so the user understands how a
+car is built (requested by the user 2026-10-18). Done when the user opens a GT5 and a GT6 car (body, interior, wheel)
+and finds the tree and the 3D view right.
 
-- [x] 5a. `/` sub streams (`gtdev bodys-subs`, all 2454 bodies): **colour variations**. Materials `..._CLR_VARI_k`
-  (GT6 only); `/` has 2 x (V + 1) sub streams, two halves, slot k = images of the `CLR_VARI_k` materials (12,802 of
-  13,461 non-empty slots; the rest = shared copies in half A and the last slots), last slot = `_PaintExtraBRDF`
-  materials (special paints). Half B = body paint, half A = soft top / roof / stripes / cabin colours (empty on 1891
-  bodies). No shapes, only images (mostly colour-shift BRDF).
-  Open: which paint colour picks which variation (GT6 database, encrypted SQLite), why two halves
-- [x] 5b. `custom_*` groups (`gtdev bodys-custom`): optional parts, a bonnet, b muffler, c rear wing, d front bumper /
-  spoiler, e flat floor, f roof cover, brake discs, calipers; item k = option k. Drawn by the v14 switch **op54**
-  (one VM register per group, set from host registers `custom0..5/10/11`): branch k of all op54 of a register =
-  exactly the shapes of item k (18,039 / 18,039). Custom items with sub streams = colour variations (70).
-  Open: 25 op54 without default jump, 20 registers fitting no group
-- [x] 5c. GT5 vs GT6 (`gtdev gt5-gt6`): 1024 cars in both, 203 GT6 only. Same model list + `GTBE_MENU_INTERIOR` and
-  `GTBE_OCCLUSION` in every GT6 car; same Maya scene reworked (median 63% of the GT5 shape paths kept); GT6 adds
-  CLR_VARI materials, moves geometry to PMSH in `body_s` and custom parts to the `body_s` groups; fewer bones
+- [ ] 6a. Scene tree in `GTFormats` (shared by viewer and gtdev): models -> Maya path nodes -> shapes, with the switch
+  branches (op5 day/night, lights...; op54 custom parts = group/item names from 5b) and the LOD levels; readable names
+  (`ShapeNaming` moves from gtdev); `gtdev mdl3-scene <file>` prints it for checking
+- [ ] 6b. Renderer: D3D11 device, vertex/index buffers from `Mdl3Mesh`, orbit camera (left drag rotate, right/middle
+  pan, wheel zoom), simple lighting, wireframe toggle; off-screen render to PNG (`gtdev view-shot`) so it can be checked
+  without clicking the UI
+- [ ] 6c. Window: File > Open (any car MDL3: GT5 hq/race/interior/wheel, GT6 body/interior/wheel), TreeView with
+  check boxes (show/hide a node), selection highlights the shape, info panel (shape index, material, vertex/triangle
+  counts, LOD), LOD and switch/custom option pickers
+- [ ] 6d. Diffuse textures on the meshes (TXS3, GT6 from `body_s`), toggle textures / flat
+- [ ] 6e. Export the visible shapes to OBJ (ZModeler 2.2.6) from the viewer
+
+Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
+OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
+material name per shape (later).
 
 ## Next
 
-6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model
-   hierarchy (models, Maya groups, shapes, switch variants, LODs) next to the 3D view, so the user understands how a
-   car is built (requested by the user 2026-10-18).
-   Exports must work in ZModeler 2.2.6: OBJ (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
-   OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`, `m004`...): readable names in ZModeler would
-   need one material name per shape (later, not needed now).
 7. **Materials and textures for display** — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
    ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
    external ones (sampler 0x8000 | n, provided by the game):
@@ -128,3 +124,23 @@ against the game data) and the GT6 vs GT5 differences of the same car are writte
 - [x] 4e. Check over every car file (`gtdev mesh-check`, `tests\mesh_check`): about 900,000 shapes, **all decode** with the
   shared decoder. Found on the way: GT5 plain triangle strips (shape flags nibble 6, restart +20), S1 shadow positions =
   raw / 2^k (k from the shape bbox; where the game stores it is open), empty tire templates
+- **5. GT6 `body_s`** (closed 2026-10-18) — colour variations, custom parts (op54), GT5 vs GT6; findings in `docs/mdl3.md`.
+  Container known (3d: stream map, bundles, images), shape data decoded (4d). Explain what the parts of the stream map
+  are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
+  against the game data) and the GT6 vs GT5 differences of the same car are written down.
+
+- [x] 5a. `/` sub streams (`gtdev bodys-subs`, all 2454 bodies): **colour variations**. Materials `..._CLR_VARI_k`
+  (GT6 only); `/` has 2 x (V + 1) sub streams, two halves, slot k = images of the `CLR_VARI_k` materials (12,802 of
+  13,461 non-empty slots; the rest = shared copies in half A and the last slots), last slot = `_PaintExtraBRDF`
+  materials (special paints). Half B = body paint, half A = soft top / roof / stripes / cabin colours (empty on 1891
+  bodies). No shapes, only images (mostly colour-shift BRDF).
+  Open: which paint colour picks which variation (GT6 database, encrypted SQLite), why two halves
+- [x] 5b. `custom_*` groups (`gtdev bodys-custom`): optional parts, a bonnet, b muffler, c rear wing, d front bumper /
+  spoiler, e flat floor, f roof cover, brake discs, calipers; item k = option k. Drawn by the v14 switch **op54**
+  (VM register = base + rank of the part among the car's custom parts a, b, brake, c, caliper, d, e, f; 2454 / 2454;
+  base = end of the VM outputs, 786 / 786): branch k of all op54 of a register = exactly the shapes of item k
+  (18,119 / 18,119; some op54 start every branch with an op15 pop). Custom items with sub streams = colour
+  variations (70). Open: the base on bodies without VM outputs (after the VM locals, from the bytecode)
+- [x] 5c. GT5 vs GT6 (`gtdev gt5-gt6`): 1024 cars in both, 203 GT6 only. Same model list + `GTBE_MENU_INTERIOR` and
+  `GTBE_OCCLUSION` in every GT6 car; same Maya scene reworked (median 63% of the GT5 shape paths kept); GT6 adds
+  CLR_VARI materials, moves geometry to PMSH in `body_s` and custom parts to the `body_s` groups; fewer bones
