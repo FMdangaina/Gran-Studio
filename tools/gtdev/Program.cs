@@ -64,6 +64,9 @@ return args[0] switch
     "mdl3-scene" => Mdl3SceneDump.Run(args[1..]),
     "specdb-dump" => SpecDbDump.Run(args[1..]),
     "car-list" => CarList.Run(args[1..]),
+    "mdl3-diffuse" => Mdl3Diffuse.Run(args[1..]),
+    "shds-vp" => ShdsVp.Run(args[1..]),
+    "uv-scale" => UvScaleSurvey.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 

@@ -7,7 +7,7 @@ namespace GTViewer;
 
 /// <summary>
 /// GTViewer --shot &lt;file&gt; &lt;out.png&gt; [--yaw D] [--pitch D] [--lod N] [--size WxH] [--wire] [--flat]
-/// [--set selector=branch]... [--obj out.obj]: render the default view of a file off screen to a PNG and exit (no window), so the
+/// [--set selector=branch]... [--obj out.obj] [--only shape,shape...]: render the default view of a file off screen to a PNG and exit (no window), so the
 /// renderer can be checked without using the mouse. Writes a text report next to the PNG.
 /// </summary>
 static class Shot
@@ -22,6 +22,7 @@ static class Shot
         bool flat = false;
         var sets = new List<(int, int)>();
         string? objPath = null;
+        HashSet<int>? only = null;
         for (int i = 3; i < args.Length; i++)
             switch (args[i])
             {
@@ -33,10 +34,13 @@ static class Shot
                 case "--flat": flat = true; break;
                 case "--set": var q = args[++i].Split('='); sets.Add((int.Parse(q[0]), int.Parse(q[1]))); break;
                 case "--obj": objPath = args[++i]; break;
+                case "--only": only = args[++i].Split(',').Select(int.Parse).ToHashSet(); break;
             }
         renderer.CreateOffscreen(w, h);
         using var doc = new ViewerDocument(file, renderer) { Lod = lod, Textures = !flat };
         foreach (var (s, b) in sets) doc.State[s] = b;
+        if (only != null)
+            foreach (var n in doc.Scene.Root.All().Where(n => n.Kind == "shape" && !only.Contains(n.Shape))) doc.Hidden.Add(n);
         var items = doc.DrawItems(out var min, out var max);
         cam.Frame(min, max);
         renderer.Render(cam.ViewProj(w / (float)h), new Vector3(-0.4f, -1, -0.6f), items);

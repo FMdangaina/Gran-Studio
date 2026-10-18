@@ -150,7 +150,8 @@ public sealed class ViewerDocument : IDisposable
             if (mesh == null) continue;
             int mat = File.Shapes[n.Shape].MaterialIndex;
             var tex = Textures ? DiffuseTexture(mat) : null;
-            items.Add(new DrawItem(mesh, tex != null ? Vector4.One : MaterialColor(mat), tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model)));
+            // textured: the colour under the texture is a neutral paint (the real paint colour is in the game data, item 7)
+            items.Add(new DrawItem(mesh, tex != null ? new Vector4(0.86f, 0.86f, 0.86f, 1) : MaterialColor(mat), tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model)));
             min = Vector3.Min(min, mesh.Min); max = Vector3.Max(max, mesh.Max);
         }
         if (items.Count == 0) { min = -Vector3.One; max = Vector3.One; }

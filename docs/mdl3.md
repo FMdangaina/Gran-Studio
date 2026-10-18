@@ -572,6 +572,27 @@ against GT5 `car\{hq,race}\MMMMNNNN`. 1024 cars are in both (hq and race), 203 a
 - Bones: GT6 has fewer (often 0 where GT5 had 1; 14 -> 10 on 0001/0095); 23 cars more (the Roadster: 1 -> 9, the
   soft top joints).
 
+### UV transform in the vertex programs (found in item 6)
+
+The stored UVs are not always the ones the shader samples with: the vertex program of the material's first pass
+(shader reference 0x88 -> pass -> SHDS vertex program record) reads the UV attribute (`map12` / `map1`, input record
++06 = attribute) with one instruction: **MOV** (as stored), **MUL** by a constant (scale), **ADD**/**MAD** (offset).
+The constants of a program are in its microcode preamble: +10 u32 preamble size (instructions start there),
++14 u32 count, +18 the constant registers, then 16-byte values aligned to 16. One instruction reads one constant
+register, each source with its own swizzle (constants are shared: (0.5, 2, 0, 0) read as .yyyy = x2).
+NV40 vertex instruction (layout of the public nouveau nvfx headers): word 1 bits 8-11 input attribute, 12-21 constant
+register, 22-26 vector opcode; 17-bit sources src0 = word1 0-7 + word2 23-31, src1 = word2 6-22, src2 = word2 0-5 +
+word3 21-31; source bits 0-1 type (2 input, 3 constant), 14-15 / 12-13 the component for x / y, 16 negate.
+`Mdl3UvScale` (applied in `Mdl3Mesh.Decode`, so in the viewer and the exports), `gtdev uv-scale` survey and
+`gtdev shds-vp <file> <material>` (VP/FP records, a minimal RSX fragment program disassembler):
+
+- over 17,012 car/wheel files (per used material): GT5 191,981 MOV, 11,645 x2, 1535 x8, 1421 x4, 793 x1;
+  GT6 150,399 MOV, 23,453 x2, 10,201 x4, 3130 x8, 4340 x1; no UV input 173,208.
+- MAD / ADD (2354 + 452) use the named runtime constant `UVShiftControl` (UV animation), not in the file: left as stored.
+- Examples: Castrol Supra (GT6 0004/0078) body x2 (the livery was wrong without it), Demio (0001/0112) emblem x2
+  (MUL c[465].xxxx, c[465] = (2, 0, 0, 0)), Demio plate MOV.
+- PDTools reads every S1 UV as /16384 (= x2 for all): right on the x2 materials, wrong on MOV and x4/x8 ones.
+
 ### Item 4e: every car file through the shared decoder
 
 `gtdev mesh-check <files.tsv> <groupRegex> <out.txt>` decodes every shape of every file at every LOD level with

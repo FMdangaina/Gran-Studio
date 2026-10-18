@@ -6,41 +6,7 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-### 6. Viewer
-Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model hierarchy
-(models, Maya groups, shapes, switch variants, custom parts, LODs) next to the 3D view, so the user understands how a
-car is built (requested by the user 2026-10-18). Done when the user opens a GT5 and a GT6 car (body, interior, wheel)
-and finds the tree and the 3D view right.
-
-- [x] 6a. Scene tree in `GTFormats` (`Mdl3Scene`, shared by viewer and gtdev): models -> Maya path nodes -> shapes,
-  every op5/op54 switch as a selector with named branches (custom parts = `body_s` group, or the `CUSTOM_x` Maya node in
-  interiors; state switches = the Maya words only their branch has: DAYTIME / NIGHT, BRAKE_ON...), the branches each
-  shape is drawn in, LOD level from `LEVEL_n`; `ShapeNaming` moved to GTFormats. `gtdev mdl3-scene <file>` prints it;
-  survey over 17,012 car/wheel files: only the 19 known MDL3 v1-4 files fail
-- [x] 6b. Renderer (Vortice 3.8.3, D3D11, WARP fallback): GPU meshes from `Mdl3Mesh`, two-sided Lambert, wireframe,
-  orbit camera; `GTViewer --shot <file> <out.png> [--yaw --pitch --lod --set sel=branch --wire --flat --obj]`
-  renders off screen (checked: Demio GT6 body/interior/wheel, RX-7 GT5 hq night, race 00010095 LOD0-3, Roadster wing
-  option 3, GT5 wheel)
-- [ ] 6c. Window: File > Open (or drop a file / give it on the command line), TreeView with check boxes (show / hide;
-  shapes grey when the switches or LOD do not draw them; switched shapes show their options), switches and LOD
-  pickers, selection highlighted in orange + status bar (shape, material, triangles, Maya path), double-click or S
-  frames the selection, F frames all, Ctrl+W wireframe, Ctrl+T textures. At load: helper models hidden (shadow,
-  self-shadow, light mask, menu cabin, occlusion, FIXn instance copies). **To check by the user**
-- [x] 6d. Diffuse textures (in the file or GT6 `body_s`); parts without a diffuse map (paint, GT6 wheels) get a soft
-  colour per material: real colours are item 7
-- [ ] 6f. Car list by name (requested by the user during 6, takes the first part of item 8): File > Open game folder
-  (Ctrl+G) on GT5_VOL or GT6_VOL -> list with search, year, files, thumbnail; buttons open hq/race body, interior,
-  wheels; the car name goes in the title and the tree root. `GtDb` (GTDB reader, re-implemented from PDTools.SpecDB,
-  MIT) + `CarCatalog`; `gtdev car-list <root> <out.tsv>`, `gtdev specdb-dump`. GT5: 1088/1088 named from the specdb
-  (VARIATION.ModelCode -> CAR_NAME_british, GENERIC_CAR year), all with thumbnail. GT6: 1024 from the GT5 specdb
-  next to it, 169 guessed from the Maya project paths in the model (shown as guessed), 34 without name; 1063
-  thumbnails (stand-alone TXS3, `Txs3Image.DecodeFile`). **To check by the user**
-- [ ] 6e. File > Export visible to OBJ (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
-  152,758 faces). **To check by the user in ZModeler**
-
-Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
-OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
-material name per shape (later).
+(empty: the user picks the next item; proposal: 7, materials and textures for display)
 
 ## Next
 
@@ -60,6 +26,8 @@ material name per shape (later).
      `specdb\GT6\<region>\CarName.dat` (`NDB0`, compressed strings) or `DB0106.dat` (encrypted, not in PDTools);
    - thumbnails: GT5 `car\thumbnail_M` (2110), GT6 `car\thumbnail_S` / `_L` (1293), TXS3 named `<label>_<colour>`;
    - first a `gtdev` car list (code, label, maker, name, files present), then a window in the viewer (item 6).
+   **Mostly done in 6f** (car list window, GT5 all named, GT6 1193 of 1227). Left: the 34 unnamed GT6 cars and the
+   guessed names (GT6 `CarName.dat` NDB0 / encrypted `DB0106.dat`).
 
 ## Later / open questions
 
@@ -158,3 +126,41 @@ material name per shape (later).
 - [x] 5c. GT5 vs GT6 (`gtdev gt5-gt6`): 1024 cars in both, 203 GT6 only. Same model list + `GTBE_MENU_INTERIOR` and
   `GTBE_OCCLUSION` in every GT6 car; same Maya scene reworked (median 63% of the GT5 shape paths kept); GT6 adds
   CLR_VARI materials, moves geometry to PMSH in `body_s` and custom parts to the `body_s` groups; fewer bones
+- **6. Viewer** (2026-10-18, **closed with reservations** by the user: works, details not checked yet; open: 6e OBJ export not checked in ZModeler, UVShiftControl materials left as stored, paint colours = item 7)
+Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: a **TreeView** with the model hierarchy
+(models, Maya groups, shapes, switch variants, custom parts, LODs) next to the 3D view, so the user understands how a
+car is built (requested by the user 2026-10-18). Done when the user opens a GT5 and a GT6 car (body, interior, wheel)
+and finds the tree and the 3D view right.
+
+- [x] 6a. Scene tree in `GTFormats` (`Mdl3Scene`, shared by viewer and gtdev): models -> Maya path nodes -> shapes,
+  every op5/op54 switch as a selector with named branches (custom parts = `body_s` group, or the `CUSTOM_x` Maya node in
+  interiors; state switches = the Maya words only their branch has: DAYTIME / NIGHT, BRAKE_ON...), the branches each
+  shape is drawn in, LOD level from `LEVEL_n`; `ShapeNaming` moved to GTFormats. `gtdev mdl3-scene <file>` prints it;
+  survey over 17,012 car/wheel files: only the 19 known MDL3 v1-4 files fail
+- [x] 6b. Renderer (Vortice 3.8.3, D3D11, WARP fallback): GPU meshes from `Mdl3Mesh`, two-sided Lambert, wireframe,
+  orbit camera; `GTViewer --shot <file> <out.png> [--yaw --pitch --lod --set sel=branch --wire --flat --obj]`
+  renders off screen (checked: Demio GT6 body/interior/wheel, RX-7 GT5 hq night, race 00010095 LOD0-3, Roadster wing
+  option 3, GT5 wheel)
+- [x] 6c. Window: File > Open (or drop a file / give it on the command line), TreeView with check boxes (show / hide;
+  shapes grey when the switches or LOD do not draw them; switched shapes show their options), switches and LOD
+  pickers, selection highlighted in orange + status bar (shape, material, triangles, Maya path), double-click or S
+  frames the selection, F frames all, Ctrl+W wireframe, Ctrl+T textures. At load: helper models hidden (shadow,
+  self-shadow, light mask, menu cabin, occlusion, FIXn instance copies). Used by the user (Castrol Supra, GT6)
+- [x] 6d. Diffuse textures (in the file or GT6 `body_s`); parts without a diffuse map (paint, GT6 wheels) get a soft
+  colour per material: real colours are item 7. Textures blend over a neutral paint by their alpha (decal sheets).
+  Livery "messed up" on the Castrol Supra (user, 2026-10-18): the UVs are transformed by each material's vertex
+  program (MOV / MUL x1, x2, x4, x8 / MAD with the runtime `UVShiftControl`): `Mdl3UvScale`, applied in
+  `Mdl3Mesh.Decode` (viewer and exports); see docs/mdl3.md "UV transform"
+- [ ] 6f. Car list by name (requested by the user during 6, takes the first part of item 8): File > Open game folder
+  (Ctrl+G) on GT5_VOL or GT6_VOL -> list with search, year, files, thumbnail; buttons open hq/race body, interior,
+  wheels; the car name goes in the title and the tree root. `GtDb` (GTDB reader, re-implemented from PDTools.SpecDB,
+  MIT) + `CarCatalog`; `gtdev car-list <root> <out.tsv>`, `gtdev specdb-dump`. GT5: 1088/1088 named from the specdb
+  (VARIATION.ModelCode -> CAR_NAME_british, GENERIC_CAR year), all with thumbnail. GT6: 1024 from the GT5 specdb
+  next to it, 169 guessed from the Maya project paths in the model (shown as guessed), 34 without name; 1063
+  thumbnails (stand-alone TXS3, `Txs3Image.DecodeFile`). Used by the user
+- [ ] 6e. File > Export visible to OBJ (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
+  152,758 faces). **To check by the user in ZModeler**
+
+Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
+OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
+material name per shape (later).

@@ -47,6 +47,15 @@ public sealed class Mdl3Mesh
     /// </summary>
     public static Mdl3Mesh? Decode(Mdl3File m, int shape, int lod, out string reason)
     {
+        var mesh = DecodeStored(m, shape, lod, out reason);
+        // UVs as the shader sees them: the material's vertex program may scale them (Mdl3UvScale)
+        if (mesh?.Uvs != null && Mdl3UvScale.Of(m, m.Shapes[shape].MaterialIndex) is { IsIdentity: false } t)
+            for (int i = 0; i < mesh.Uvs.Length; i++) mesh.Uvs[i] = t.Apply(mesh.Uvs[i]);
+        return mesh;
+    }
+
+    static Mdl3Mesh? DecodeStored(Mdl3File m, int shape, int lod, out string reason)
+    {
         var r = m.Data;
         var sh = m.Shapes[shape];
         reason = "";

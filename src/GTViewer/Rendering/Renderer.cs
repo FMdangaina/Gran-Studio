@@ -65,7 +65,8 @@ public sealed class Renderer : IDisposable
             float d = abs(dot(n, -Light.xyz));                 // two-sided: the winding is not trusted
             float3 base = Color.rgb;
             float a = Color.a;
-            if (Params.x > 0) { float4 t = Tex.Sample(Smp, i.uv); base *= t.rgb; }
+            // decal sheets: where the texture is transparent the paint under it shows (their RGB there is junk)
+            if (Params.x > 0) { float4 t = Tex.Sample(Smp, i.uv); base = lerp(base, t.rgb, t.a); }
             float3 c = base * (0.30 + 0.25 * (n.y * 0.5 + 0.5) + 0.55 * d);
             if (Params.y > 0) c = lerp(c, float3(1.0, 0.55, 0.1), 0.6);
             return float4(c, a);
