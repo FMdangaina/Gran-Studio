@@ -21,6 +21,11 @@ game files and note in `docs/` where our results agree or differ.
 No third-party code is copied into this repository. Format knowledge (field layouts, opcode operand sizes) from
 PDTools is re-implemented and verified independently.
 
+`src/GTFormats/SpecDb/GtDb.cs` (GTDB spec database tables: Huffman + template-row row compression, .idi labels,
+GTST string databases) is a re-implementation of Nenkai's PDTools.SpecDB (`DBT_DatabaseTable`, `Table`,
+`IDI_LabelInformation`, `StringDatabase`), MIT License — Copyright (c) Nenkai. The GT5 column layouts used by
+`CarCatalog` (VARIATION, CAR_NAME, GENERIC_CAR) come from PDTools' table mappings.
+
 If code from these projects is ever reused, its MIT copyright notice must be copied here:
 
 ```

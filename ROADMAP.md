@@ -28,6 +28,13 @@ and finds the tree and the 3D view right.
   self-shadow, light mask, menu cabin, occlusion, FIXn instance copies). **To check by the user**
 - [x] 6d. Diffuse textures (in the file or GT6 `body_s`); parts without a diffuse map (paint, GT6 wheels) get a soft
   colour per material: real colours are item 7
+- [ ] 6f. Car list by name (requested by the user during 6, takes the first part of item 8): File > Open game folder
+  (Ctrl+G) on GT5_VOL or GT6_VOL -> list with search, year, files, thumbnail; buttons open hq/race body, interior,
+  wheels; the car name goes in the title and the tree root. `GtDb` (GTDB reader, re-implemented from PDTools.SpecDB,
+  MIT) + `CarCatalog`; `gtdev car-list <root> <out.tsv>`, `gtdev specdb-dump`. GT5: 1088/1088 named from the specdb
+  (VARIATION.ModelCode -> CAR_NAME_british, GENERIC_CAR year), all with thumbnail. GT6: 1024 from the GT5 specdb
+  next to it, 169 guessed from the Maya project paths in the model (shown as guessed), 34 without name; 1063
+  thumbnails (stand-alone TXS3, `Txs3Image.DecodeFile`). **To check by the user**
 - [ ] 6e. File > Export visible to OBJ (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
   152,758 faces). **To check by the user in ZModeler**
 

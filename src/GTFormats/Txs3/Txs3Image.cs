@@ -41,6 +41,23 @@ public sealed class Txs3Image
         return Enumerable.Range(0, count).Select(i => Read(r, at + i * RecordSize)).ToList();
     }
 
+    /// <summary>
+    /// A stand-alone TXS3 file (car thumbnails): the first image, level 0, as RGBA; null when it does not decode.
+    /// The pixel offsets are absolute in the file, as in an MDL3.
+    /// </summary>
+    public static byte[]? DecodeFile(byte[] file, out int width, out int height)
+    {
+        width = height = 0;
+        var r = new BigEndianReader(file);
+        if (file.Length < 0x20 || r.U32(0) != 0x54585333) return null;   // "TXS3"
+        var img = ReadAll(r, 0).FirstOrDefault();
+        if (img == null || img.Offset == 0 || img.Offset >= file.Length) return null;
+        img.Cube = false;   // +08 is 2 in stand-alone files (2D), not a cube flag
+        img.Mipmaps = 1;
+        width = img.Width; height = img.Height;
+        return img.DecodeLevel0(file.AsSpan((int)img.Offset, (int)Math.Min(img.Size, file.Length - img.Offset)));
+    }
+
     public static int BytesPerPixel(int baseFormat) => baseFormat switch
     {
         0x81 => 1, 0x85 or 0x95 or 0x9C or 0x9E or 0x9F => 4, 0x9A => 8, 0x9B => 16,

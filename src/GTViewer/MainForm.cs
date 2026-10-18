@@ -34,7 +34,8 @@ public sealed class MainForm : Form
 
         var menu = new MenuStrip();
         var fileMenu = new ToolStripMenuItem("&File");
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Open...", null, (_, _) => OpenDialog()) { ShortcutKeys = Keys.Control | Keys.O });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Open &game folder (car list by name)...", null, (_, _) => OpenGameFolder()) { ShortcutKeys = Keys.Control | Keys.G });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Open file...", null, (_, _) => OpenDialog()) { ShortcutKeys = Keys.Control | Keys.O });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Export visible to OBJ...", null, (_, _) => ExportObj()) { ShortcutKeys = Keys.Control | Keys.E });
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("E&xit", null, (_, _) => Close()));
@@ -81,7 +82,7 @@ public sealed class MainForm : Form
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] f && f.Length > 0) Open(f[0]); };
         // splitter positions only hold once the window has its size
         Load += (_, _) => { split.SplitterDistance = 420; left.SplitterDistance = Math.Max(200, left.Height - 260); };
-        Shown += (_, _) => { if (file != null) Open(file); else status.Text = "File > Open (Ctrl+O) or drop a GT5/GT6 model file (car body, interior, wheel) here."; };
+        Shown += (_, _) => { if (file != null) Open(file); else status.Text = "File > Open game folder (Ctrl+G) to pick a car by name, File > Open file (Ctrl+O), or drop a model file here."; };
         FormClosed += (_, _) => { doc?.Dispose(); renderer.Dispose(); };
     }
 
@@ -92,7 +93,27 @@ public sealed class MainForm : Form
         if (dlg.ShowDialog(this) == DialogResult.OK) Open(dlg.FileName);
     }
 
-    void Open(string path)
+    static readonly string SettingsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GTViewer", "last_game_folder.txt");
+    CarListForm? carList;
+
+    void OpenGameFolder()
+    {
+        string last = "";
+        try { if (File.Exists(SettingsFile)) last = File.ReadAllText(SettingsFile).Trim(); } catch { }
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = "Pick the extracted game folder (GT5_VOL or GT6_VOL)",
+            UseDescriptionForTitle = true,
+            InitialDirectory = Directory.Exists(last) ? last : Directory.Exists(@"F:\GT_DEV") ? @"F:\GT_DEV" : "",
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try { Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!); File.WriteAllText(SettingsFile, dlg.SelectedPath); } catch { }
+        carList?.Close();
+        carList = new CarListForm(dlg.SelectedPath, (file, title) => Open(file, title));
+        carList.Show(this);
+    }
+
+    void Open(string path, string? title = null)
     {
         if (path.EndsWith("body_s", StringComparison.OrdinalIgnoreCase)) path = path[..^2];   // GT6: the body_s goes with body
         ViewerDocument next;
@@ -109,7 +130,8 @@ public sealed class MainForm : Form
         finally { Cursor = Cursors.Default; }
         doc?.Dispose();
         doc = next;
-        Text = $"GTViewer - {path}";
+        Text = title != null ? $"GTViewer - {title}" : $"GTViewer - {path}";
+        if (title != null) doc.Scene.Root.Name = title;
         FillTree();
         FillSwitches();
         FrameAll();

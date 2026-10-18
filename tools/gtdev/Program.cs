@@ -62,6 +62,8 @@ return args[0] switch
     "bodys-custom" => BodySCustom.Run(args[1..]),
     "gt5-gt6" => Gt5Gt6Compare.Run(args[1..]),
     "mdl3-scene" => Mdl3SceneDump.Run(args[1..]),
+    "specdb-dump" => SpecDbDump.Run(args[1..]),
+    "car-list" => CarList.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 
