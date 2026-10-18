@@ -26,8 +26,21 @@ Tests and dumps: `tests\<topic>` (not committed).
      `specdb\GT6\<region>\CarName.dat` (`NDB0`, compressed strings) or `DB0106.dat` (encrypted, not in PDTools);
    - thumbnails: GT5 `car\thumbnail_M` (2110), GT6 `car\thumbnail_S` / `_L` (1293), TXS3 named `<label>_<colour>`;
    - first a `gtdev` car list (code, label, maker, name, files present), then a window in the viewer (item 6).
-   **Mostly done in 6f** (car list window, GT5 all named, GT6 1193 of 1227). Left: the 34 unnamed GT6 cars and the
-   guessed names (GT6 `CarName.dat` NDB0 / encrypted `DB0106.dat`).
+   **Mostly done in 6f** (car list window, GT5 all named, GT6 1193 of 1227). 2026-10-18: GT6 now reads its own
+   database: `DB0106.dat` = SQLite encrypted with Salsa20 (key published by Nenkai, GTToolsSharp / modding guides),
+   `Gt6SpecDb` decrypts it to `%LOCALAPPDATA%\GTViewer\specdb` and joins GENERIC_CAR.ModelCode (maker * 10000 + car =
+   the model folders) with CAR_NAME_ALPHABET: **1227 of 1227 GT6 cars named, all with thumbnail**. Waiting for the
+   user to close it.
+9. **Car data from the spec databases** (proposal) — the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
+   tables, `gtdev gt6-specdb`): engine (power, torque curve torqueA-X over rpmA-X, rev limit, sound), chassis (mass,
+   size, weight split, cd/cl, ride height), gears and final drive, drivetrain, suspension (springs, dampers, camber,
+   toe, anti-roll), brakes, tyres, colours (VARIATION: names per paint = the `body_s` colour slots of item 5a), custom
+   parts (CAR_CUSTOM_INFO bits = the custom_* groups of item 5b). Steps:
+   - a. a car sheet in the viewer (and `gtdev`) from DEFAULT_PARTS -> part tables, with units checked;
+   - b. same sheet for GT5 (GTDB column layouts from PDTools' table mappings);
+   - c. export as a neutral file (JSON / CSV) that Forza Studio can read: mapping GT fields -> FM4 gamedb
+     (Data_Car, Data_Engine, torque curve, gears...), unit conversions, what has no equivalent. The import itself
+     belongs to the Forza Studio repo, as its own topic.
 
 ## Later / open questions
 

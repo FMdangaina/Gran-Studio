@@ -21,7 +21,7 @@ static class CarList
             foreach (var e in list)
                 w.WriteLine($"{e.Game}\t{e.Code}\t{e.Name}\t{e.Year}\t{e.Label}\t{e.NameSource}\t{e.HqBody != null}\t{e.RaceBody != null}\t{e.Interior != null}\t{e.Wheels.Count}\t{Path.GetFileName(e.Thumbnail)}");
         }
-        Console.WriteLine($"{list.Count} cars: {list.Count(e => e.NameSource == "specdb")} named from the specdb, {list.Count(e => e.NameSource == "model paths")} from model paths, " +
+        Console.WriteLine($"{list.Count} cars: {list.Count(e => e.NameSource.EndsWith("specdb"))} named from a specdb ({string.Join(", ", list.Where(e => e.NameSource.EndsWith("specdb")).GroupBy(e => e.NameSource).Select(g => $"{g.Key} {g.Count()}"))}), {list.Count(e => e.NameSource == "model paths")} from model paths, " +
             $"{list.Count(e => e.Name.Length == 0)} without name, {list.Count(e => e.Thumbnail != null)} with thumbnail -> {args[1]}");
         return 0;
     }

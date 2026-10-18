@@ -27,6 +27,7 @@ if (args.Length == 0)
     Console.WriteLine("  bodys-custom <files.tsv> <groupRegex> <out.txt> | <body>   item 5b: custom_* groups vs the op54 switches");
     Console.WriteLine("  gt5-gt6 <gt5 root> <gt6 root> <out.txt>   item 5c: the same car code in GT5 and GT6");
     Console.WriteLine("  mdl3-scene <file> [out.txt] | <files.tsv> <groupRegex> <out.txt>   the viewer's scene tree, switches, LOD levels");
+    Console.WriteLine("  gt6-specdb <DB0106.dat> <out.sqlite> [report.txt] [--menu]   decrypt a GT6 SQLite database, list its tables");
     return 1;
 }
 
@@ -63,6 +64,7 @@ return args[0] switch
     "gt5-gt6" => Gt5Gt6Compare.Run(args[1..]),
     "mdl3-scene" => Mdl3SceneDump.Run(args[1..]),
     "specdb-dump" => SpecDbDump.Run(args[1..]),
+    "gt6-specdb" => Gt6SpecDbDump.Run(args[1..]),
     "car-list" => CarList.Run(args[1..]),
     "mdl3-diffuse" => Mdl3Diffuse.Run(args[1..]),
     "shds-vp" => ShdsVp.Run(args[1..]),

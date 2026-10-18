@@ -21,8 +21,9 @@ public sealed class CarEntry
 /// <summary>
 /// The car list of an extracted game folder (GT5_VOL or GT6_VOL), as in Forza Studio: every model code with its
 /// files, the name, year and database label from the GT5 spec database (`specdb\GT5_JP3009`: VARIATION.ModelCode =
-/// the model folder, CAR_NAME_british, GENERIC_CAR year). GT6 uses the GT5 database when it sits next to it
-/// (963 of the 1227 GT6 codes are in it); for the others the name is guessed from the Maya project paths in the model.
+/// the model folder, CAR_NAME_british, GENERIC_CAR year). GT6 uses its own SQLite database (<see cref="Gt6SpecDb"/>);
+/// without it, the GT5 database when it sits next to it (963 of the 1227 GT6 codes are in it), and for the others
+/// the name is guessed from the Maya project paths in the model.
 /// </summary>
 public static class CarCatalog
 {
@@ -33,8 +34,14 @@ public static class CarCatalog
         string car = Path.Combine(root, "car");
         if (!Directory.Exists(car)) throw new DirectoryNotFoundException($"No 'car' folder in {root}: pick the extracted GT5_VOL or GT6_VOL folder.");
         bool gt5 = Directory.Exists(Path.Combine(car, "hq"));
-        var db = FindSpecDb(root, gt5);
-        var names = db != null ? ReadNames(db) : [];
+        var names = gt5 ? [] : ReadGt6Names(root);
+        string nameSource = "GT6 specdb";
+        if (names.Count == 0)
+        {
+            var db = FindSpecDb(root, gt5);
+            names = db != null ? ReadNames(db) : [];
+            nameSource = gt5 ? "specdb" : "GT5 specdb";
+        }
         var list = new List<CarEntry>();
         if (gt5)
         {
@@ -75,7 +82,7 @@ public static class CarCatalog
             if (names.TryGetValue(e.Code, out var info))
             {
                 (e.Name, e.Label, e.Year) = info;
-                e.NameSource = "specdb";
+                e.NameSource = nameSource;
             }
             else
             {
@@ -92,6 +99,18 @@ public static class CarCatalog
     }
 
     static string? Existing(string p) => File.Exists(p) ? p : null;
+
+    /// <summary>GT6 names from its own spec database (specdb\GT6\DB0106.dat), empty when missing or unreadable.</summary>
+    static Dictionary<string, (string Name, string Label, int Year)> ReadGt6Names(string root)
+    {
+        try
+        {
+            if (Gt6SpecDb.Find(root) is not { } f) return [];
+            using var db = Gt6SpecDb.Open(f);
+            return db.CarNames();
+        }
+        catch { return []; }
+    }
 
     /// <summary>The GT5 spec database: in a GT5 folder, or in a GT5 folder next to a GT6 one.</summary>
     static string? FindSpecDb(string root, bool gt5)
