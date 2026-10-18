@@ -79,6 +79,8 @@ public sealed class MainForm : Form
         };
         DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] f && f.Length > 0) Open(f[0]); };
+        // splitter positions only hold once the window has its size
+        Load += (_, _) => { split.SplitterDistance = 420; left.SplitterDistance = Math.Max(200, left.Height - 260); };
         Shown += (_, _) => { if (file != null) Open(file); else status.Text = "File > Open (Ctrl+O) or drop a GT5/GT6 model file (car body, interior, wheel) here."; };
         FormClosed += (_, _) => { doc?.Dispose(); renderer.Dispose(); };
     }
