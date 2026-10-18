@@ -40,7 +40,7 @@ triangle count = shape +26) and sample cars look whole. Findings in `docs/mdl3.m
    the meaning of the `/` sub streams and `custom_*` groups, then GT6 vs GT5 differences.
 6. **Viewer** — Direct3D 11 (Vortice.Windows), read only, in the style of Forza Studio: shows the model **hierarchy**
    (models, Maya groups, shapes, switch variants, LODs) so the user understands how a car is built.
-   Exports must work in ZModeler 2.2.6 (OBJ / 3DS); glTF is not read there.
+   Exports must work in ZModeler 2.2.6: OBJ (the user does not want 3DS; glTF is not read there).
 7. **Materials and textures for display** — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
    ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
    external ones (sampler 0x8000 | n, provided by the game):

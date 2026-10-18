@@ -93,6 +93,10 @@ static class Mdl3Obj
             }
             log?.AppendLine($"{s,4} {(mesh.Packed ? "packed" : "plain ")} v={mesh.Positions.Length,6} tris={mesh.Indices.Length / 3,6} (+26 {sh.TriCount,6}) " +
                             $"n={(mesh.Normals != null ? "y" : "-")} uv={(mesh.Uvs != null ? "y" : "-")}  {ShapeNaming.Short(m, s)}  {full}");
+            // OBJ has no parent links: the group path (meaningful Maya groups above the shape) goes in a g line
+            var raw = full.Split('|', StringSplitOptions.RemoveEmptyEntries);
+            var groupPath = ShapeNaming.Nodes(string.Join('|', raw.Take(Math.Max(1, raw.Length - 2))));
+            obj.AppendLine($"g {(groupPath.Count > 0 ? string.Join('/', groupPath) : "shape")}");
             obj.AppendLine($"o {ShapeNaming.Short(m, s)}");
             if (sh.MaterialIndex >= 0) { obj.AppendLine($"usemtl m{sh.MaterialIndex:D3}"); usedMaterials.Add(sh.MaterialIndex); }
             foreach (var p in mesh.Positions) obj.AppendLine(string.Create(ci, $"v {p.X} {p.Y} {p.Z}"));
