@@ -36,6 +36,7 @@ static class Mdl3Obj
         var textures = new Mdl3TextureSet(m);
         var log = new StringBuilder();
         log.AppendLine($"{args[0]}: {m.Shapes.Count} shapes, {all.Count} exported models' shapes, {lods} LOD level(s); LOD0 shapes:");
+        var textureFolder = new ObjTextureFolder(lods == 1 ? outDir : Path.Combine(outDir, stem));   // the textures once, next to the lodN folders
         for (int lod = 0; lod < lods; lod++)
         {
             // GT6: the op8 LOD selects pick one shape per level; GT5 packed shapes hold their levels inside
@@ -44,7 +45,7 @@ static class Mdl3Obj
             string dir = lods == 1 ? outDir : Path.Combine(outDir, stem, $"lod{lod}");
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, stem + ".obj");
-            var materials = new ObjMaterials(m, textures);
+            var materials = new ObjMaterials(m, textures, textureFolder);
             int exported = Export(m, shapes, lod, path, stem + ".mtl", materials, lod == 0 ? log : null, out int skipped);
             materials.Write(Path.Combine(dir, stem + ".mtl"), Png.Write);
             Console.WriteLine($"lod{lod}: {exported} shapes exported, {skipped} skipped -> {path}");

@@ -41,6 +41,9 @@ Tests and dumps: `tests\<topic>` (not committed).
      (GT6) or `\wheel\CODE\lodN` (GT5; the `CODE.NN` wheels are aftermarket rims, user: "non mi serve esportarli":
      skipped); the open file as shown, the others as loaded. Checked: GT6 MX-5 (from its interior), R18; GT5 RX-7,
      HPA TT (from an aftermarket wheel file: only wheel 01890002) in `tests\tex_full\export_id`.
+     Last fix (user: "non serve avere mille folder"): all the textures of the export in `<name>\` next to the mesh
+     folders, each once (`ObjTextureFolder`: same name, other pixels -> `_2`); the .mtl files refer to them with a
+     relative path (`map_Kd ..\..\front_light_OFF_Color_DXT5.png`). Also `gtdev mdl3-obj` with several levels.
    - [x] c. **all the textures**: every in-file texture a material uses is saved next to the OBJ, named after its
      Polyphony texture name (`front_light_OFF_Color_DXT5.png`): diffuse / Raytrace colour = `map_Kd`, alpha = `map_d`,
      specular = `map_Ks`, normal = `bump`, others (dirt, occlusion, BRDF, env...) as `#` comments in the .mtl.

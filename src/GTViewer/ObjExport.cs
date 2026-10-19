@@ -18,10 +18,10 @@ static class ObjExport
     /// All LOD levels, one folder each (ROADMAP 12b): &lt;dir&gt;/&lt;name&gt;/lod0/&lt;name&gt;.obj + .mtl + the textures its
     /// materials use, lod1/..., returns the shapes per level.
     /// </summary>
-    public static List<int> WriteAllLods(ViewerDocument doc, string dir, string name) => WriteLods(doc, Path.Combine(dir, name), name, true);
+    public static List<int> WriteAllLods(ViewerDocument doc, string dir, string name) => WriteLods(doc, Path.Combine(dir, name), name, true, new ObjTextureFolder(Path.Combine(dir, name)));
 
     /// <summary>Every LOD level of a model into folder\lodN\stem.obj (one level and not <paramref name="lodFolders"/>: folder\stem.obj).</summary>
-    static List<int> WriteLods(ViewerDocument doc, string folder, string stem, bool lodFolders)
+    static List<int> WriteLods(ViewerDocument doc, string folder, string stem, bool lodFolders, ObjTextureFolder textures)
     {
         int keep = doc.Lod;
         var counts = new List<int>();
@@ -32,7 +32,7 @@ static class ObjExport
                 doc.Lod = k;
                 string lodDir = doc.LodCount == 1 && !lodFolders ? folder : Path.Combine(folder, $"lod{k}");
                 Directory.CreateDirectory(lodDir);
-                counts.Add(Write(doc, Path.Combine(lodDir, stem + ".obj")));
+                counts.Add(Write(doc, Path.Combine(lodDir, stem + ".obj"), textures));
             }
         }
         finally { doc.Lod = keep; }
@@ -43,14 +43,15 @@ static class ObjExport
     /// The whole car by its code (ROADMAP 12b, user 2026-10-19: "export completo per id macchina da hq race interior
     /// wheels"), from any of its files: &lt;dir&gt;\&lt;name&gt;\hq\lod0..N and \race\lod0..N (bodies), \cockpit (interior;
     /// cockpit\lodN when it has levels), \wheel\hq|race\lod0..N (GT6) or \wheel\CODE\lod0..N (GT5; the CODE.NN wheels are
-    /// aftermarket rims, not exported), each folder with its .obj, .mtl and textures. The open file is exported as shown (switches,
+    /// aftermarket rims, not exported), each folder with its .obj and .mtl; the textures all in &lt;name&gt;\ (each once). The open file is exported as shown (switches,
     /// hidden parts), the others with their default visibility. A model that is not a car file: its levels only.
     /// </summary>
     public static List<string> WriteCar(ViewerDocument doc, Renderer renderer, string dir, string name)
     {
         string root = Path.Combine(dir, name);
+        var textures = new ObjTextureFolder(root);   // every texture of the car once, next to the mesh folders (user 2026-10-19)
         var car = CarCatalog.FromModelPath(doc.Path);
-        if (car == null) return [$"levels: {Levels(WriteLods(doc, root, name, true))}"];
+        if (car == null) return [$"levels: {Levels(WriteLods(doc, root, name, true, textures))}"];
         var report = new List<string>();
         void Add(string what, string? file, string folder, string stem, bool lodFolders)
         {
@@ -76,21 +77,21 @@ static class ObjExport
                 using var part = open ? null : new ViewerDocument(file, renderer);
                 var d = part ?? doc;
                 if (!d.VisibleShapes().Any()) return $"no shapes in {Path.GetFileName(Path.GetDirectoryName(file))}\\{Path.GetFileName(file)}, not exported (GT5: the cockpit is in the hq body)";
-                return Levels(WriteLods(d, folder, stem, lodFolders));
+                return Levels(WriteLods(d, folder, stem, lodFolders, textures));
             }
             catch (Exception e) { return $"not exported ({e.Message})"; }
         }
         static string Levels(List<int> counts) => string.Join(", ", counts.Select((c, k) => $"LOD{k} {c}"));
     }
 
-    public static int Write(ViewerDocument doc, string path)
+    public static int Write(ViewerDocument doc, string path, ObjTextureFolder? textures = null)
     {
         var ci = CultureInfo.InvariantCulture;
         string dir = Path.GetDirectoryName(Path.GetFullPath(path))!, stem = Path.GetFileNameWithoutExtension(path);
         var obj = new StringBuilder();
         obj.AppendLine($"# GTViewer export of {doc.Path}, LOD {doc.Lod}");
         obj.AppendLine($"mtllib {stem}.mtl");
-        var materials = new ObjMaterials(doc.File, doc.TextureSet);
+        var materials = new ObjMaterials(doc.File, doc.TextureSet, textures);
         int vBase = 1, exported = 0;
         var done = new HashSet<int>();   // a shape drawn by two models is written once
         foreach (var n in doc.VisibleShapes())
