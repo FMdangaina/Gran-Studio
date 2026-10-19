@@ -30,6 +30,7 @@ if (args.Length == 0)
     Console.WriteLine("  gt6-specdb <DB0106.dat> <out.sqlite> [report.txt] [--menu]   decrypt a GT6 SQLite database, list its tables");
     Console.WriteLine("  sql <plain.sqlite | DB0106.dat> <query>   run one SELECT on a GT6 database (a .dat is decrypted to the viewer's cache)");
     Console.WriteLine("  car-list <root> <out.tsv> | --sheet <root> <code|parts>   the viewer's car list, car sheet, wheels and parts");
+    Console.WriteLine("  tex-full <out.txt> <file>...   per material: samplers and where their pixels are, colours, object names");
     return 1;
 }
 
@@ -72,6 +73,8 @@ return args[0] switch
     "mdl3-diffuse" => Mdl3Diffuse.Run(args[1..]),
     "shds-vp" => ShdsVp.Run(args[1..]),
     "uv-scale" => UvScaleSurvey.Run(args[1..]),
+    "tex-full" => TexFull.Run(args[1..]),
+    "strb-tex" => StrbTex.Run(args[1..]),
     _ => Unknown(args[0]),
 };
 

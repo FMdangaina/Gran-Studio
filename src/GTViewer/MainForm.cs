@@ -21,7 +21,12 @@ public sealed class MainForm : Form
     readonly ToolStripMenuItem texItem = new("&Textures") { CheckOnClick = true, Checked = true, ShortcutKeys = Keys.Control | Keys.T };
     readonly ToolStripMenuItem listItem = new("Car &list") { CheckOnClick = true, ShortcutKeys = Keys.Control | Keys.L };
     readonly SplitContainer outer = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, FixedPanel = FixedPanel.Panel2 };
+    readonly TabControl tabs = new() { Dock = DockStyle.Fill };
+    readonly TabPage viewTab = new("3D view");
+    readonly TabPage texturesTab = new("Textures");
+    readonly TexturePanel texturePanel = new() { Dock = DockStyle.Fill };
     ViewerDocument? doc;
+    string? docTitle;   // the car list title of the open file (car name - game code part)
     bool filling;
     Point lastMouse;
     MouseButtons dragging;
@@ -40,13 +45,13 @@ public sealed class MainForm : Form
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("Open &game folder (car list by name)...", null, (_, _) => OpenGameFolder()) { ShortcutKeys = Keys.Control | Keys.G });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Open file...", null, (_, _) => OpenDialog()) { ShortcutKeys = Keys.Control | Keys.O });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Export visible to OBJ...", null, (_, _) => ExportObj()) { ShortcutKeys = Keys.Control | Keys.E });
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export visible, &all LOD levels to OBJ...", null, (_, _) => ExportObj(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.E });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export the whole &car to OBJ (hq, race, cockpit, wheels, all LOD levels)...", null, (_, _) => ExportObj(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.E });
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("E&xit", null, (_, _) => Close()));
         var viewMenu = new ToolStripMenuItem("&View");
         viewMenu.DropDownItems.Add(wireItem);
         viewMenu.DropDownItems.Add(texItem);
-        viewMenu.DropDownItems.Add(new ToolStripMenuItem("Te&xture browser...", null, (_, _) => ShowTextures()) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.T });
+        viewMenu.DropDownItems.Add(new ToolStripMenuItem("Te&xture browser (tab)", null, (_, _) => tabs.SelectedTab = tabs.SelectedTab == texturesTab ? viewTab : texturesTab) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.T });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Frame all", null, (_, _) => FrameAll()) { ShortcutKeyDisplayString = "F" });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("Frame &selected", null, (_, _) => FrameSelected()) { ShortcutKeyDisplayString = "S" });
         menu.Items.Add(fileMenu);
@@ -59,7 +64,13 @@ public sealed class MainForm : Form
         left.Panel2.Controls.Add(switches);
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 400, FixedPanel = FixedPanel.Panel1 };
         split.Panel1.Controls.Add(left);
-        split.Panel2.Controls.Add(view);
+        // right: the 3D view and the texture browser as tabs (no pop-up windows)
+        viewTab.Controls.Add(view);
+        texturesTab.Controls.Add(texturePanel);
+        tabs.TabPages.Add(viewTab);
+        tabs.TabPages.Add(texturesTab);
+        tabs.SelectedIndexChanged += (_, _) => { if (tabs.SelectedTab == texturesTab) FillTextures(); };
+        split.Panel2.Controls.Add(tabs);
         // the car list (File > Open game folder) docks under the tree and the view
         outer.Panel1.Controls.Add(split);
         outer.Panel2Collapsed = true;
@@ -86,7 +97,7 @@ public sealed class MainForm : Form
         tree.NodeMouseDoubleClick += (_, _) => FrameSelected();
         KeyDown += (_, e) =>
         {
-            if (tree.Focused || carPanel?.ContainsFocus == true || e.Modifiers != Keys.None) return;   // typing in the search box
+            if (tree.Focused || carPanel?.ContainsFocus == true || tabs.SelectedTab != viewTab || e.Modifiers != Keys.None) return;   // typing in the search box
             if (e.KeyCode == Keys.F) { FrameAll(); e.Handled = true; }
             if (e.KeyCode == Keys.S) { FrameSelected(); e.Handled = true; }
         };
@@ -156,17 +167,26 @@ public sealed class MainForm : Form
         outer.Panel2Collapsed = false;
         PlaceListSplitter();
         try { await carPanel.LoadAsync(); }
-        catch (Exception e) { MessageBox.Show(this, e.Message, "Cars", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception e) { status.Text = "Car list: " + e.Message; }
     }
 
     /// <summary>The car list takes the lower third of the window (at least 260 px).</summary>
     void PlaceListSplitter() => outer.SplitterDistance = Math.Max(200, outer.Height - Math.Max(260, outer.Height / 3));
 
-    /// <summary>The texture browser on the open model (or empty, to open a file in it).</summary>
-    void ShowTextures()
+    /// <summary>The Textures tab shows the open model's textures (filled when the tab is shown, decoded once per model).</summary>
+    void FillTextures()
     {
-        var form = doc == null ? new TextureForm() : new TextureForm(doc.TextureSet, Text.Replace("GTViewer - ", ""));
-        form.Show(this);
+        if (doc != null && texturePanel.Current != doc.TextureSet) texturePanel.SetTextures(doc.TextureSet, Text.Replace("GTViewer - ", ""));
+    }
+
+    /// <summary>--tex-shot: the main window with a file in the Textures tab, an image selected, as a PNG.</summary>
+    public void ShotTextures(string file, string png, int image, int mode)
+    {
+        texturePanel.ThumbnailsDone += () => { texturePanel.Shot(png, image, mode, this); Close(); };
+        Open(file);
+        tabs.SelectedTab = texturesTab;
+        FillTextures();
+        if (texturePanel.Current == null) { Console.Error.WriteLine(status.Text); Close(); }
     }
 
     void Open(string path, string? title = null)
@@ -174,9 +194,9 @@ public sealed class MainForm : Form
         if (path.EndsWith("body_s", StringComparison.OrdinalIgnoreCase)) path = path[..^2];   // GT6: the body_s goes with body
         if (IsTxs3File(path))
         {
-            // a texture file (thumbnail, decken): the texture browser
-            var form = new TextureForm();
-            if (form.OpenFile(path)) form.Show(this); else form.Dispose();
+            // a texture file (thumbnail, decken): the Textures tab
+            tabs.SelectedTab = texturesTab;
+            texturePanel.OpenFile(path);
             return;
         }
         ViewerDocument next;
@@ -187,18 +207,20 @@ public sealed class MainForm : Form
         }
         catch (Exception e)
         {
-            MessageBox.Show(this, $"Cannot open {path}:\n{e.Message}\n\n(MDL3 files of the old versions 1-4 are not read.)", "GTViewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            status.Text = $"Cannot open {path}: {e.Message} (MDL3 files of the old versions 1-4 are not read.)";
             return;
         }
         finally { Cursor = Cursors.Default; }
         doc?.Dispose();
         doc = next;
+        docTitle = title;
         Text = title != null ? $"GTViewer - {title}" : $"GTViewer - {path}";
         if (title != null) doc.Scene.Root.Name = title;
         FillTree();
         FillSwitches();
         FrameAll();
         UpdateStatus();
+        if (tabs.SelectedTab == texturesTab) FillTextures();
     }
 
     void UpdateStatus()
@@ -376,35 +398,31 @@ public sealed class MainForm : Form
     void ExportObj(bool allLods = false)
     {
         if (doc == null) return;
-        string stem = Path.GetFileName(doc.Path);
+        // the car name when it was opened from the car list, else the file name
+        string stem = System.Text.RegularExpressions.Regex.Replace(
+            ObjMaterials.Clean(docTitle != null ? docTitle.Split(" - ")[0] : Path.GetFileName(doc.Path)), "_+", "_");
         using var dlg = new SaveFileDialog
         {
-            Title = allLods ? $"Export the visible shapes of all {doc.LodCount} LOD levels to OBJ (one file per level: name_lodN.obj)" : "Export the visible shapes to OBJ",
+            Title = allLods ? "Export the whole car to OBJ: name\\hq, name\\race (lodN), name\\cockpit, name\\wheel\\... (every wheel)" : "Export the visible shapes to OBJ",
             Filter = "Wavefront OBJ|*.obj",
             FileName = stem + ".obj",
+            OverwritePrompt = !allLods,
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try
         {
+            Cursor = Cursors.WaitCursor;
             if (!allLods)
             {
                 int n = ObjExport.Write(doc, dlg.FileName);
                 status.Text = $"{n} shapes exported to {dlg.FileName} (LOD{doc.Lod})";
                 return;
             }
-            Cursor = Cursors.WaitCursor;
-            int keep = doc.Lod;
             string dir = Path.GetDirectoryName(dlg.FileName)!, name = Path.GetFileNameWithoutExtension(dlg.FileName);
-            var counts = new List<string>();
-            for (int k = 0; k < doc.LodCount; k++)
-            {
-                doc.Lod = k;
-                counts.Add($"LOD{k} {ObjExport.Write(doc, Path.Combine(dir, $"{name}_lod{k}.obj"))}");
-            }
-            doc.Lod = keep;
-            status.Text = $"{doc.LodCount} LOD levels exported to {Path.Combine(dir, name)}_lodN.obj (shapes: {string.Join(", ", counts)})";
+            var parts = ObjExport.WriteCar(doc, renderer, dir, name);
+            status.Text = $"Exported to {Path.Combine(dir, name)} (shapes) {string.Join(" | ", parts)}";
         }
-        catch (Exception e) { MessageBox.Show(this, e.Message, "Export failed", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception e) { status.Text = "Export failed: " + e.Message; }
         finally { Cursor = Cursors.Default; }
     }
 }

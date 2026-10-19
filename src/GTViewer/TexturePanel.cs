@@ -10,8 +10,9 @@ namespace GTViewer;
 /// file (thumbnails, decken) as thumbnails grouped by the sampler that uses them; the selected one big (wheel zoom at the
 /// cursor, drag to pan, double-click = fit), channels RGBA / RGB / alpha / R / G / B, faces and slices of cubes and 3D
 /// textures; names, format, users and where the pixels are; save one or all as PNG (level 0, RGBA).
+/// A tab of the main window (user 2026-10-19: as few pop-up windows as possible).
 /// </summary>
-public sealed class TextureForm : Form
+public sealed class TexturePanel : UserControl
 {
     readonly ImageList thumbs = new() { ImageSize = new Size(96, 96), ColorDepth = ColorDepth.Depth32Bit };
     readonly ListView list;
@@ -26,24 +27,10 @@ public sealed class TextureForm : Form
     string source = "";
     CancellationTokenSource? job;
 
-    public TextureForm(Mdl3TextureSet? textures = null, string? title = null)
+    public TexturePanel()
     {
-        Text = "GTViewer - Textures";
-        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        ClientSize = new Size(1300, 860);
-        StartPosition = FormStartPosition.CenterScreen;
         AllowDrop = true;
         list = new ListView { Dock = DockStyle.Fill, View = View.LargeIcon, LargeImageList = thumbs, MultiSelect = false, HideSelection = false, ShowGroups = true };
-
-        var menu = new MenuStrip();
-        var fileMenu = new ToolStripMenuItem("&File");
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Open model or texture file...", null, (_, _) => OpenDialog()) { ShortcutKeys = Keys.Control | Keys.O });
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Save selected as PNG / TGA...", null, (_, _) => SaveSelected()) { ShortcutKeys = Keys.Control | Keys.S });
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Save &all as PNG...", null, (_, _) => SaveAll(".png")) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.S });
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Save all as &TGA...", null, (_, _) => SaveAll(".tga")));
-        fileMenu.DropDownItems.Add(new ToolStripSeparator());
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Close", null, (_, _) => Close()));
-        menu.Items.Add(fileMenu);
 
         channels.Items.AddRange(["RGBA", "RGB", "Alpha", "Red", "Green", "Blue"]);
         channels.SelectedIndex = 0;
@@ -51,6 +38,13 @@ public sealed class TextureForm : Form
         slices.SelectedIndexChanged += (_, _) => ShowSelected(keepView: true);
         filter.TextChanged += (_, _) => FillList();
         var tools = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden };
+        var save = new ToolStripDropDownButton("Save");
+        save.DropDownItems.Add(new ToolStripMenuItem("Selected as PNG / TGA...", null, (_, _) => SaveSelected()));
+        save.DropDownItems.Add(new ToolStripMenuItem("All as PNG...", null, (_, _) => SaveAll(".png")));
+        save.DropDownItems.Add(new ToolStripMenuItem("All as TGA...", null, (_, _) => SaveAll(".tga")));
+        tools.Items.Add(new ToolStripButton("Open texture file...", null, (_, _) => OpenDialog()) { ToolTipText = "A stand-alone TXS3 (thumbnails, decken) or a model: only its textures" });
+        tools.Items.Add(save);
+        tools.Items.Add(new ToolStripSeparator());
         tools.Items.Add(new ToolStripLabel("Channels"));
         tools.Items.Add(channels);
         tools.Items.Add(new ToolStripLabel("Face / slice"));
@@ -74,8 +68,6 @@ public sealed class TextureForm : Form
         Controls.Add(split);
         Controls.Add(tools);
         Controls.Add(statusStrip);
-        Controls.Add(menu);
-        MainMenuStrip = menu;
         Load += (_, _) => { split.SplitterDistance = 470; right.SplitterDistance = Math.Max(200, right.Height - 230); };
 
         list.SelectedIndexChanged += (_, _) => { FillSlices(); ShowSelected(keepView: false); };
@@ -83,10 +75,11 @@ public sealed class TextureForm : Form
         picture.MouseMove += (_, e) => ShowPixel(e.Location);
         DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] f && f.Length > 0) OpenFile(f[0]); };
-        FormClosed += (_, _) => { job?.Cancel(); picture.Image = null; thumbs.Dispose(); };
-
-        if (textures != null) SetTextures(textures, title ?? "");
+        Disposed += (_, _) => { job?.Cancel(); picture.Image = null; thumbs.Dispose(); };
     }
+
+    /// <summary>The textures shown now (to know whether the open model's are already there).</summary>
+    public Mdl3TextureSet? Current => set;
 
     /// <summary>Opens a model (MDL3) or a stand-alone TXS3 file; GT6 body_s goes with its body.</summary>
     public bool OpenFile(string path)
@@ -100,7 +93,7 @@ public sealed class TextureForm : Form
         }
         catch (Exception e)
         {
-            MessageBox.Show(this, $"Cannot read {path}:\n{e.Message}", "Textures", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            status.Text = $"Cannot read {path}: {e.Message}";
             return false;
         }
     }
@@ -117,7 +110,6 @@ public sealed class TextureForm : Form
         job?.Cancel();
         set = textures;
         source = title;
-        Text = $"GTViewer - Textures - {title}";
         thumbs.Images.Clear();
         picture.Image = null;
         set.FindBodyS();   // where the GT6 body pixels are, for the info panel
@@ -125,7 +117,8 @@ public sealed class TextureForm : Form
         FillList();
         if (list.Items.Count > 0) list.Items[0].Selected = true;
         else ShowSelected(false);
-        status.Text = $"{set.Entries.Count} images, {set.External.Count} external sampler(s) (provided by the game, listed in the info panel)";
+        int shared = set.Entries.Count(e => e.SharedFrom != null);
+        status.Text = $"{title}: {set.Entries.Count - shared} images{(shared > 0 ? $" + {shared} shared from other game files (blue)" : "")}, {set.External.Count} external sampler(s) (drawn by the game at run time, listed in the info panel)";
         StartThumbnails();
     }
 
@@ -166,8 +159,9 @@ public sealed class TextureForm : Form
         {
             string text = string.Join(" ", e.Names) + " " + string.Join(" ", e.Users.Select(u => u.MaterialName + " " + u.Sampler)) + " " + e.Image;
             if (f.Length > 0 && !text.Contains(f, StringComparison.OrdinalIgnoreCase)) continue;
-            // group by the sampler that uses it: the diffuse map wins, else the most used one
-            string key = e.Users.Count == 0 ? (set.File == null ? "Images" : "Not used by a material")
+            // group by the sampler that uses it: the diffuse map wins, else the most used one; textures of other game files apart
+            string key = e.SharedFrom != null ? SharedGroup
+                : e.Users.Count == 0 ? (set.File == null ? "Images" : "Not used by a material")
                 : e.Users.Any(u => u.Sampler == "diffuseMapSampler") ? "diffuseMapSampler"
                 : e.Users.GroupBy(u => u.Sampler).OrderByDescending(g => g.Count()).First().Key;
             if (!groups.TryGetValue(key, out var g))
@@ -175,11 +169,19 @@ public sealed class TextureForm : Form
                 g = new ListViewGroup(key, key);
                 groups[key] = g;
             }
-            list.Items.Add(new ListViewItem($"{e.ShortName}\n{e.Record.Width}x{e.Record.Height}", e.Image) { Tag = e, Group = g, ToolTipText = string.Join("\n", e.Names) });
+            list.Items.Add(new ListViewItem($"{e.ShortName}\n{e.Record.Width}x{e.Record.Height}", e.Image)
+            {
+                Tag = e, Group = g, ToolTipText = e.SharedFrom ?? string.Join("\n", e.Names),
+                ForeColor = e.SharedFrom != null ? SharedColor : list.ForeColor,
+            });
         }
-        foreach (var g in groups.OrderBy(x => x.Key == "Not used by a material" ? 1 : 0).ThenBy(x => x.Key)) list.Groups.Add(g.Value);
+        foreach (var g in groups.OrderBy(x => x.Key == SharedGroup ? 2 : x.Key == "Not used by a material" ? 1 : 0).ThenBy(x => x.Key)) list.Groups.Add(g.Value);
         list.EndUpdate();
     }
+
+    /// <summary>Textures of other game files the model uses (ROADMAP 11.2): own group, names in blue.</summary>
+    const string SharedGroup = "Shared: other game files (race numbers, meter digits)";
+    static readonly Color SharedColor = Color.RoyalBlue;
 
     Mdl3TextureEntry? Selected => list.SelectedItems.Count > 0 ? list.SelectedItems[0].Tag as Mdl3TextureEntry : null;
 
@@ -223,6 +225,7 @@ public sealed class TextureForm : Form
         List<string> lines =
         [
             $"image {e.Image}: {e.ShortName}",
+            e.SharedFrom != null ? $"SHARED: from another game file, {e.SharedFrom}" : null!,
             $"{r.Width} x {r.Height}{(r.Depth > 1 ? $" x {r.Depth}" : "")}, {e.FormatText}, {r.Mipmaps} mip level(s), {r.Size:N0} bytes, location {(r.Location == 1 ? "local" : r.Location == 2 ? "main" : r.Location.ToString())}",
             decoded ? "" : "PIXELS NOT DECODED (not found or format not handled)",
             "names:",
@@ -265,7 +268,7 @@ public sealed class TextureForm : Form
     {
         if (set == null || Selected is not { } e) return;
         var rgba = set.Decode(e.Image);
-        if (rgba == null) { MessageBox.Show(this, "This image could not be decoded.", "Textures"); return; }
+        if (rgba == null) { status.Text = "This image could not be decoded."; return; }
         using var dlg = new SaveFileDialog { Title = "Save the texture (level 0, RGBA)", Filter = "PNG|*.png|TGA (32-bit, with alpha)|*.tga", FileName = SafeName(Path.GetFileNameWithoutExtension(e.ShortName)) + ".png" };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         string file = dlg.FileName;
@@ -369,14 +372,14 @@ public sealed class TextureForm : Form
         return bmp;
     }
 
-    /// <summary>--tex-shot: the window with a file, an image selected (by index), as a PNG; no screen capture.</summary>
-    public void Shot(string png, int image, int mode)
+    /// <summary>--tex-shot: the window holding the panel, an image selected (by index), as a PNG; no screen capture.</summary>
+    public void Shot(string png, int image, int mode, Control window)
     {
         channels.SelectedIndex = mode;
         foreach (ListViewItem it in list.Items) if (it.Tag is Mdl3TextureEntry e && e.Image == image) { it.Selected = true; it.EnsureVisible(); }
         Application.DoEvents();
-        using var bmp = new Bitmap(Width, Height);
-        DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+        using var bmp = new Bitmap(window.Width, window.Height);
+        window.DrawToBitmap(bmp, new Rectangle(0, 0, window.Width, window.Height));
         bmp.Save(png, ImageFormat.Png);
         File.WriteAllText(Path.ChangeExtension(png, ".txt"), info.Text);
         // the selected image saved both ways, to compare the TGA with the PNG

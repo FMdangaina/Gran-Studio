@@ -210,6 +210,22 @@ offset, size, format, mipmaps, width, height), +20 = MDL3 header 0x6C.
 - **GT6: 168,414 of 169,980 images have offset 0** — the pixels are not in `body` (a 512x512 DXT5 is bigger than the file).
   To find with item 3 / item 5 (`body_s` or another file).
 
+### Material colours without textures, external textures (ROADMAP 12c, 10 models)
+
+`gtdev tex-full <out.txt> <file>...`: per used material the samplers and where their pixels are, colours, vertex
+colours, the shader colour candidates. On GT6, about half the shapes use a material **with no diffuse map and no
+colour constant** (material data constants are empty): the colour is an **inline constant of the fragment program**
+(RSX FP constants follow their instruction, words half-swapped). Constants the game sets at run time (light, fog,
+exposure: the FP's named `con` entries) are 0 in the file. `Mdl3ShaderColor` takes the first MOV/MUL/MAD writing .xyz
+from a constant in 0..1 that is not (0,0,0), (1,1,1) or (1,0,1) (Maya `lambert2`). Right on rubber, plastics, metal,
+glass, mirrors, lamp covers; wrong on some (a heuristic, not an emulation).
+- Paint: `_CLR_VARI_k` materials sample `reflect/scatterColorShiftMapSampler`; the one-row image (4x1, 32x1:
+  `ScatterColorShiftBRDF`) is the paint colour of the body colour k (MX-5 0001/0012: 129 1 6 red).
+- `colorSet1` (UB x4, plain FVF or PMSH raw element) is grey occlusion (mean 0.4-0.9), not a colour.
+- External samplers (bit 15) are drawn by the game at run time: their `n` is a per-file slot (Decken 2, number plate 9
+  on the MX-5; ExtraMeter 2/3/4 on the RX-8), not a file. On disk only `car\decken` (TXS3 64x64, fonts a-h x 00-99)
+  and the car's `meter` (STRB holding TXS3 blocks of LCD digits).
+
 ### UV scale (the open point of 2d) — answered for GT5 plain shapes
 
 `gtdev mdl3-uv` over the 2176 GT5 car files (all plain shapes, every vertex), UV decoded as S1/32767, UB/255, F as is:

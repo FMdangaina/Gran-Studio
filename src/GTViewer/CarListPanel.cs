@@ -22,7 +22,9 @@ public sealed class CarListPanel : UserControl
     readonly ListView wingList = NewList(("Name", 260), ("Code", 80));
     readonly PictureBox thumb = new() { Dock = DockStyle.Top, Height = 170, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(41, 43, 48) };
     readonly TextBox info = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9), BackColor = SystemColors.Window };
-    readonly FlowLayoutPanel buttons = new() { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Padding = new Padding(0, 2, 0, 2) };
+    // the files of the selected item (body hq / race, interior, wheels...): selecting one opens it
+    readonly ListView files = NewList(("Open", 135), ("File", 145));
+    bool fillingFiles;
     List<CarEntry> cars = [];
     List<PartEntry> parts = [];
     Gt6SpecDb? specDb;
@@ -42,11 +44,17 @@ public sealed class CarListPanel : UserControl
         top.Controls.Add(count, 1, 0);
         AddTab("Cars", carList);
         AddTab("Wheels", wheelList);
-        // right side: thumbnail and open buttons, then the car sheet in its own column
+        // right side: thumbnail and the list of files to open, then the car sheet in its own column
         var picture = new Panel { Dock = DockStyle.Left, Width = 330, Padding = new Padding(4, 0, 4, 0) };
-        thumb.Dock = DockStyle.Fill;
+        thumb.Dock = DockStyle.Top;
+        thumb.Height = 130;
+        files.ShowItemToolTips = true;
+        picture.Controls.Add(files);
         picture.Controls.Add(thumb);
-        picture.Controls.Add(buttons);
+        files.SelectedIndexChanged += (_, _) =>
+        {
+            if (!fillingFiles && files.SelectedItems.Count > 0 && files.SelectedItems[0].Tag is (string file, Func<string> title)) open(file, title());
+        };
         var right = new Panel { Dock = DockStyle.Right, Width = 700 };
         right.Controls.Add(info);
         right.Controls.Add(picture);
@@ -165,7 +173,9 @@ public sealed class CarListPanel : UserControl
 
     void ShowSelected()
     {
-        buttons.Controls.Clear();
+        fillingFiles = true;
+        files.BeginUpdate();
+        files.Items.Clear();
         thumb.Image?.Dispose();
         thumb.Image = null;
         info.Text = "";
@@ -174,6 +184,8 @@ public sealed class CarListPanel : UserControl
             case CarEntry e: ShowCar(e); break;
             case PartEntry p: ShowPart(p); break;
         }
+        files.EndUpdate();
+        fillingFiles = false;
     }
 
     void ShowCar(CarEntry e)
@@ -194,13 +206,13 @@ public sealed class CarListPanel : UserControl
         info.Text = string.Join(Environment.NewLine, text);
         if (e.Thumbnail != null) thumb.Image = LoadThumbnail(e.Thumbnail);
 
-        AddButton("Open body (hq)", e.HqBody, () => Title(e, "hq body"));
-        AddButton("Open body (race)", e.RaceBody, () => Title(e, "race body"));
-        AddButton("Open interior", e.Interior, () => Title(e, "interior"));
+        AddFile("body (hq)", e.HqBody, () => Title(e, "hq body"));
+        AddFile("body (race)", e.RaceBody, () => Title(e, "race body"));
+        AddFile("interior", e.Interior, () => Title(e, "interior"));
         foreach (var w in e.Wheels)
         {
             string what = e.Game == "GT5" ? $"wheel {Path.GetFileName(w)}" : $"{Path.GetFileName(Path.GetDirectoryName(w))} wheel";
-            AddButton("Open " + what, w, () => Title(e, what));
+            AddFile(what, w, () => Title(e, what));
         }
     }
 
@@ -213,17 +225,17 @@ public sealed class CarListPanel : UserControl
         if (p.RaceFile != null) text.Add(p.RaceFile);
         info.Text = string.Join(Environment.NewLine, text);
         if (p.Thumbnail != null) thumb.Image = LoadThumbnail(p.Thumbnail);
-        AddButton(p.RaceFile != null ? "Open (hq)" : "Open", p.File, () => $"{p.Name} - {p.Code} {p.Kind}");
-        AddButton("Open (race)", p.RaceFile, () => $"{p.Name} - {p.Code} {p.Kind} race");
-        if (p.Car is { } c) AddButton("Open the car body", c.HqBody ?? c.RaceBody, () => Title(c, c.HqBody != null ? "hq body" : "race body"));
+        AddFile(p.RaceFile != null ? $"{p.Kind} (hq)" : p.Kind, p.File, () => $"{p.Name} - {p.Code} {p.Kind}");
+        AddFile($"{p.Kind} (race)", p.RaceFile, () => $"{p.Name} - {p.Code} {p.Kind} race");
+        if (p.Car is { } c) AddFile("the car body", c.HqBody ?? c.RaceBody, () => Title(c, c.HqBody != null ? "hq body" : "race body"));
     }
 
-    void AddButton(string text, string? file, Func<string> title)
+    /// <summary>One row of the file list: what it is, and the file path under the game folder.</summary>
+    void AddFile(string text, string? file, Func<string> title)
     {
         if (file == null) return;
-        var b = new Button { Text = text, AutoSize = true, Height = 28 };
-        b.Click += (_, _) => open(file, title());
-        buttons.Controls.Add(b);
+        string rel = file.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? file[root.Length..].TrimStart('\\', '/') : file;
+        files.Items.Add(new ListViewItem([text, rel]) { Tag = (file, title), ToolTipText = file });
     }
 
     static string Title(CarEntry e, string what) => $"{(e.Name.Length > 0 ? e.Name : e.Code)} - {e.Game} {e.Code} {what}";

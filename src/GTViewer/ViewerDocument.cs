@@ -97,14 +97,14 @@ public sealed class ViewerDocument : IDisposable
     /// <summary>Every TXS3 image of the file (shared with the texture browser, decoded once).</summary>
     public Mdl3TextureSet TextureSet => textureSet ??= new Mdl3TextureSet(File);
 
-    /// <summary>The diffuse map of a material: TXS3 image index and its level 0 as RGBA (null pixels when not decodable).</summary>
+    /// <summary>
+    /// The texture of a material (diffuse map, Raytrace colour map, race number: <see cref="Mdl3TextureSet.Look"/>): TXS3
+    /// image index and its level 0 as RGBA.
+    /// </summary>
     public (int Image, byte[]? Rgba, int Width, int Height)? DiffuseImage(int material)
     {
-        if (material < 0 || material >= File.Materials.Count) return null;
-        var key = File.Materials[material]["diffuseMapSampler"];
-        if (key == null || key.External || key.Index >= File.TextureInfos.Count) return null;
-        int image = File.TextureInfos[key.Index].ImageIndex;
-        if (image >= TextureSet.Entries.Count) return null;
+        int image = TextureSet.Look(material).Image;
+        if (image < 0) return null;
         var img = TextureSet.Entries[image].Record;
         return (image, TextureSet.Decode(image), img.Width, img.Height);
     }
@@ -137,9 +137,11 @@ public sealed class ViewerDocument : IDisposable
             var mesh = Mesh(n.Shape, out _);
             if (mesh == null) continue;
             int mat = File.Shapes[n.Shape].MaterialIndex;
+            // Textures on: the material's texture over its colour (paint, constant or shader colour: ROADMAP 12c);
+            // off: a soft colour per material, to tell the parts apart
             var tex = Textures ? DiffuseTexture(mat) : null;
-            // textured: the colour under the texture is a neutral paint (the real paint colour is in the game data, item 7)
-            items.Add(new DrawItem(mesh, tex != null ? new Vector4(0.86f, 0.86f, 0.86f, 1) : MaterialColor(mat), tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model)));
+            var color = Textures ? new Vector4(TextureSet.Look(mat).Color, 1) : MaterialColor(mat);
+            items.Add(new DrawItem(mesh, color, tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model)));
             min = Vector3.Min(min, mesh.Min); max = Vector3.Max(max, mesh.Max);
         }
         if (items.Count == 0) { min = -Vector3.One; max = Vector3.One; }

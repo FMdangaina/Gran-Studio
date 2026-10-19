@@ -113,6 +113,41 @@ public static class CarCatalog
 
     static string? Existing(string p) => File.Exists(p) ? p : null;
 
+    /// <summary>
+    /// The car a model file belongs to, from its path alone (no scan, no names): GT6 car\MMMM\NNNN\hq|race\body|wheel or
+    /// \interior, GT5 car\hq|race|interior\CODE or wheel\hq\CODE[.NN]. Null when the path is none of these.
+    /// </summary>
+    public static CarEntry? FromModelPath(string modelPath)
+    {
+        string p = Path.GetFullPath(modelPath);
+        if (p.EndsWith("body_s", StringComparison.OrdinalIgnoreCase)) p = p[..^2];
+        var m6 = Regex.Match(p, @"^(.*[\\/]car[\\/](\d{4})[\\/](\d{4}))[\\/]", RegexOptions.IgnoreCase);
+        if (m6.Success)
+        {
+            string dir = m6.Groups[1].Value;
+            var e = new CarEntry { Game = "GT6", Code = m6.Groups[2].Value + m6.Groups[3].Value };
+            e.HqBody = Existing(Path.Combine(dir, "hq", "body"));
+            e.RaceBody = Existing(Path.Combine(dir, "race", "body"));
+            e.Interior = Existing(Path.Combine(dir, "interior"));
+            foreach (var w in new[] { Path.Combine(dir, "hq", "wheel"), Path.Combine(dir, "race", "wheel") })
+                if (File.Exists(w)) e.Wheels.Add(w);
+            return e;
+        }
+        var m5 = Regex.Match(p, @"^(.*)[\\/](?:car[\\/](?:hq|race|interior)|wheel[\\/]hq)[\\/](\d{8})(?:\.\d+)?$", RegexOptions.IgnoreCase);
+        if (m5.Success)
+        {
+            string root = m5.Groups[1].Value, code = m5.Groups[2].Value, car = Path.Combine(root, "car"), wheels = Path.Combine(root, "wheel", "hq");
+            var e = new CarEntry { Game = "GT5", Code = code };
+            e.HqBody = Existing(Path.Combine(car, "hq", code));
+            e.RaceBody = Existing(Path.Combine(car, "race", code));
+            e.Interior = Existing(Path.Combine(car, "interior", code));
+            if (Directory.Exists(wheels))
+                e.Wheels = [.. Directory.GetFiles(wheels).Where(f => Path.GetFileName(f).Split('.')[0] == code).Order()];
+            return e;
+        }
+        return null;
+    }
+
     /// <summary>The GT6 spec database for a game folder: its own (GT6_VOL), else the one of a GT6 folder next to it.</summary>
     public static string? FindGt6SpecDb(string root)
     {

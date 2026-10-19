@@ -7,7 +7,7 @@ namespace GTViewer;
 
 /// <summary>
 /// GTViewer --shot &lt;file&gt; &lt;out.png&gt; [--yaw D] [--pitch D] [--lod N] [--size WxH] [--wire] [--flat]
-/// [--set selector=branch]... [--obj out.obj] [--only shape,shape...]: render the default view of a file off screen to a PNG and exit (no window), so the
+/// [--set selector=branch]... [--obj out.obj] [--obj-lods dir\name] [--obj-car dir\name] [--only shape,shape...]: render the default view of a file off screen to a PNG and exit (no window), so the
 /// renderer can be checked without using the mouse. Writes a text report next to the PNG.
 /// </summary>
 static class Shot
@@ -21,7 +21,7 @@ static class Shot
         int lod = 0;
         bool flat = false;
         var sets = new List<(int, int)>();
-        string? objPath = null;
+        string? objPath = null, lodsDir = null, carDir = null;
         HashSet<int>? only = null;
         for (int i = 3; i < args.Length; i++)
             switch (args[i])
@@ -34,6 +34,8 @@ static class Shot
                 case "--flat": flat = true; break;
                 case "--set": var q = args[++i].Split('='); sets.Add((int.Parse(q[0]), int.Parse(q[1]))); break;
                 case "--obj": objPath = args[++i]; break;
+                case "--obj-lods": lodsDir = args[++i]; break;
+                case "--obj-car": carDir = args[++i]; break;
                 case "--only": only = args[++i].Split(',').Select(int.Parse).ToHashSet(); break;
             }
         renderer.CreateOffscreen(w, h);
@@ -53,6 +55,8 @@ static class Shot
             bmp.Save(output, ImageFormat.Png);
         }
         if (objPath != null) ObjExport.Write(doc, objPath);   // the same export as File > Export visible to OBJ
+        if (lodsDir != null) ObjExport.WriteAllLods(doc, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(lodsDir))!, System.IO.Path.GetFileName(lodsDir));   // ... all LOD levels
+        List<string> car = carDir == null ? [] : ObjExport.WriteCar(doc, renderer, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(carDir))!, System.IO.Path.GetFileName(carDir));   // ... the whole car
         var shapes = doc.VisibleShapes().ToList();
         int failed = shapes.Count(n => doc.Mesh(n.Shape, out _) == null);
         File.WriteAllLines(System.IO.Path.ChangeExtension(output, ".txt"),
@@ -60,6 +64,8 @@ static class Shot
             $"{file}: {(renderer.Software ? "WARP (software)" : "hardware")} device, {w}x{h}, LOD {lod}/{doc.LodCount}",
             $"visible shape nodes {shapes.Count}, drawn {items.Count}, without mesh {failed}, textured {items.Count(i => i.Texture != null)}, triangles {doc.VisibleTriangles()}",
             $"box {min} .. {max}",
+            .. car.Select(x => "car export: " + x),
+            $"colour sources (shapes):{string.Join(", ", shapes.GroupBy(n => doc.TextureSet.Look(doc.File.Shapes[n.Shape].MaterialIndex).ColorSource).Select(g => $"{g.Key} {g.Count()}"))}",
             .. doc.Scene.Selectors.Select(s => $"switch [{s.Id}] {s.Name} = {doc.State[s.Id]}"),
             .. shapes.Select(n => (n, f: doc.Mesh(n.Shape, out var why) == null ? why : null)).Where(x => x.f != null).Select(x => $"no mesh: s{x.n.Shape} {x.n.Name}: {x.f}"),
         ]);

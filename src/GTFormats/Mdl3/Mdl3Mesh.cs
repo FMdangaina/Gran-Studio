@@ -12,6 +12,7 @@ public sealed class Mdl3Mesh
     public Vector3[] Positions = [];
     public Vector3[]? Normals;
     public Vector2[]? Uvs;
+    public Vector4[]? Colors;      // colorSet1 (UB x4 as stored, 0..1), when the vertex format has it
     public int[] Indices = [];
     public bool Packed;
     public bool NormalsComputed;   // not stored in the file (GT6 SmoothMesh data): area-weighted face normals
@@ -125,6 +126,15 @@ public sealed class Mdl3Mesh
                 mesh.Uvs[v] = new Vector2(Comp(r, uv, at, 0), Comp(r, uv, at, 1));
             }
         }
+        if (fvf["colorSet1"] is { Type: RsxVertexType.UB, Count: 4 } col)
+        {
+            mesh.Colors = new Vector4[n];
+            for (int v = 0; v < n; v++)
+            {
+                int at = (int)(vertsAt + fvf.ElementOffset(col, v));
+                mesh.Colors[v] = new Vector4(r.U8(at), r.U8(at + 1), r.U8(at + 2), r.U8(at + 3)) / 255f;
+            }
+        }
         var idx = new List<int>((int)sh.TriLength);
         if ((sh.Flags & 0xF) == 6)
         {
@@ -168,17 +178,18 @@ public sealed class Mdl3Mesh
         }
         var parts = blocks.Select(d => pmsh.Decode(r, mesh, d)).ToList();
         if (parts.Count == 1) return parts[0];
-        var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uvs = new List<Vector2>(); var idx = new List<int>();
-        bool hasN = parts.All(p => p.Normals != null), hasUv = parts.All(p => p.Uvs != null);
+        var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uvs = new List<Vector2>(); var cols = new List<Vector4>(); var idx = new List<int>();
+        bool hasN = parts.All(p => p.Normals != null), hasUv = parts.All(p => p.Uvs != null), hasC = parts.All(p => p.Colors != null);
         foreach (var p in parts)
         {
             int b = pos.Count;
             pos.AddRange(p.Positions);
             if (hasN) nrm.AddRange(p.Normals!);
             if (hasUv) uvs.AddRange(p.Uvs!);
+            if (hasC) cols.AddRange(p.Colors!);
             idx.AddRange(p.Indices.Select(i => i < 0 ? i : b + i));
         }
-        return new Mdl3Mesh { Packed = true, Positions = [.. pos], Normals = hasN ? [.. nrm] : null, Uvs = hasUv ? [.. uvs] : null, Indices = [.. idx] };
+        return new Mdl3Mesh { Packed = true, Positions = [.. pos], Normals = hasN ? [.. nrm] : null, Uvs = hasUv ? [.. uvs] : null, Colors = hasC ? [.. cols] : null, Indices = [.. idx] };
     }
 
     static Mdl3Mesh DecodePacked(Mdl3File m, Mdl3Shape sh, int lod)

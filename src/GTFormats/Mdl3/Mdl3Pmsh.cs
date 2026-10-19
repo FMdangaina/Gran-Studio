@@ -234,6 +234,12 @@ public sealed class Mdl3Pmsh
             }
             if (packed.TryGetValue(name, out var pu)) { result.Uvs = [.. pu.Select(x => new System.Numerics.Vector2(x.X, x.Y))]; break; }
         }
+        if (decl.Raw.FirstOrDefault(e => e.Name == "colorSet1") is { Type: RsxVertexType.UB, Count: 4 } rc && d.RawVertices != 0)
+            result.Colors = [.. Enumerable.Range(0, V).Select(v =>
+            {
+                int a = (int)d.RawVertices + v * decl.RawStride + rc.OutputOffset;
+                return new System.Numerics.Vector4(r.U8(a), r.U8(a + 1), r.U8(a + 2), r.U8(a + 3)) / 255f;
+            })];
         result.Indices = Mdl3PmshCommands.Triangles(r.Data, d, out _, out _, Entries1C);
         if (result.Normals == null) { result.Normals = Mdl3Mesh.FaceNormals(result.Positions, result.Indices); result.NormalsComputed = true; result.NormalSource = "computed"; }
         return result;

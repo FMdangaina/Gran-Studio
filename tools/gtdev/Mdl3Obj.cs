@@ -32,20 +32,24 @@ static class Mdl3Obj
         var scene = new Mdl3Scene(m, "");
         int lods = Math.Max(LodCount(m, all), scene.Levels);
 
-        string mtlName = Path.GetFileNameWithoutExtension(args[1]) + ".mtl";
-        var usedMaterials = new SortedSet<int>();
+        string stem = Path.GetFileNameWithoutExtension(args[1]), outDir = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
+        var textures = new Mdl3TextureSet(m);
         var log = new StringBuilder();
         log.AppendLine($"{args[0]}: {m.Shapes.Count} shapes, {all.Count} exported models' shapes, {lods} LOD level(s); LOD0 shapes:");
         for (int lod = 0; lod < lods; lod++)
         {
             // GT6: the op8 LOD selects pick one shape per level; GT5 packed shapes hold their levels inside
             var shapes = all.Where(s => scene.AtLevel(s, lod)).ToList();
-            string path = lod == 0 ? args[1] : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, $"{Path.GetFileNameWithoutExtension(args[1])}_lod{lod}.obj");
-            int exported = Export(m, shapes, lod, path, mtlName, usedMaterials, lod == 0 ? log : null, out int skipped);
+            // several levels: one folder each (out/stem/lodN/stem.obj + .mtl + its textures), as the viewer
+            string dir = lods == 1 ? outDir : Path.Combine(outDir, stem, $"lod{lod}");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, stem + ".obj");
+            var materials = new ObjMaterials(m, textures);
+            int exported = Export(m, shapes, lod, path, stem + ".mtl", materials, lod == 0 ? log : null, out int skipped);
+            materials.Write(Path.Combine(dir, stem + ".mtl"), Png.Write);
             Console.WriteLine($"lod{lod}: {exported} shapes exported, {skipped} skipped -> {path}");
         }
-        WriteMtl(m, usedMaterials, Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, mtlName));
-        File.WriteAllText(Path.ChangeExtension(args[1], ".txt"), log.ToString());
+        File.WriteAllText(Path.Combine(outDir, stem + ".txt"), log.ToString());
         return 0;
     }
 
@@ -79,7 +83,7 @@ static class Mdl3Obj
     /// <summary>Models that are not the visible car: shadow volumes/planes, self-shadow copies, light masks, projections.</summary>
     public static bool IsHelperModel(string name) => Mdl3Scene.IsHelperModel(name);
 
-    static int Export(Mdl3File m, List<int> shapes, int lod, string path, string mtlName, SortedSet<int> usedMaterials, StringBuilder? log, out int skipped)
+    static int Export(Mdl3File m, List<int> shapes, int lod, string path, string mtlName, ObjMaterials materials, StringBuilder? log, out int skipped)
     {
         var ci = CultureInfo.InvariantCulture;
         var obj = new StringBuilder();
@@ -107,7 +111,7 @@ static class Mdl3Obj
             var groupPath = ShapeNaming.Nodes(string.Join('|', raw.Take(Math.Max(1, raw.Length - 2))));
             obj.AppendLine($"g {(groupPath.Count > 0 ? string.Join('/', groupPath) : "shape")}");
             obj.AppendLine($"o {ShapeNaming.Short(m, s)}");
-            if (sh.MaterialIndex >= 0) { obj.AppendLine($"usemtl m{sh.MaterialIndex:D3}"); usedMaterials.Add(sh.MaterialIndex); }
+            obj.AppendLine($"usemtl {materials.Add(ShapeNaming.Short(m, s), sh.MaterialIndex)}");
             foreach (var p in mesh.Positions) obj.AppendLine(string.Create(ci, $"v {p.X} {p.Y} {p.Z}"));
             if (mesh.Uvs != null) foreach (var t in mesh.Uvs) obj.AppendLine(string.Create(ci, $"vt {t.X} {1 - t.Y}"));   // V flipped for OBJ
             if (mesh.Normals != null) foreach (var q in mesh.Normals) obj.AppendLine(string.Create(ci, $"vn {q.X} {q.Y} {q.Z}"));
@@ -152,24 +156,6 @@ static class Mdl3Obj
         foreach (var x in rows.OrderByDescending(x => x.plainShapes - x.packedShapes * 4).Take(20))
             Console.WriteLine($"{x.plain,8} plain verts  {x.plainShapes,4} plain / {x.packedShapes,4} packed  {x.path}");
         return 0;
-    }
-
-    /// <summary>One .mtl entry per used material; the diffuse (and alpha) maps found in the file are decoded to PNG next to it.</summary>
-    static void WriteMtl(Mdl3File m, IEnumerable<int> used, string path)
-    {
-        var tex = MaterialTextures(m, used, Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path));
-        var sb = new StringBuilder();
-        foreach (int i in used)
-        {
-            var mat = m.Materials[i];
-            sb.AppendLine($"newmtl m{i:D3}");
-            sb.AppendLine($"# {mat.Name} {(mat.DataIndex >= 0 && mat.DataIndex < m.MaterialData.Count ? m.MaterialData[mat.DataIndex].Name : "")}");
-            sb.AppendLine("Kd 0.8 0.8 0.8");
-            if (tex[i].Diffuse is { } kd) sb.AppendLine($"map_Kd {kd}");
-            if (tex[i].Alpha is { } d) sb.AppendLine($"map_d {d}");
-            sb.AppendLine();
-        }
-        File.WriteAllText(path, sb.ToString());
     }
 
     /// <summary>Diffuse and alpha map of each material, decoded from the file's TXS3 (level 0) to &lt;stem&gt;_texNNN.png in dir.</summary>
