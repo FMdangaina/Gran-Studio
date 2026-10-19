@@ -7,6 +7,18 @@ Tests and dumps: `tests\<topic>` (not committed).
 ## Now
 
 9c. GT car data -> Forza Studio (export JSON / CSV + FM4 field mapping), see item 9.
+   - [x] analysis (2026-10-19, user: "analizza il db del gioco ... considera sempre Supra RZ, 97 in GT6 e 98 in FM4"):
+     `gtdev car-data gt6 / fm4 / cmp`, mapping in `docs/car_data.md`, 9 cars in both games (`tests\car_data`).
+     Exact copies: mass, gear ratios, final, reverse (9 / 9), displacement, red line, peak torque (Supra 451 / 450 Nm),
+     tyre sizes, paints (ColorChip BGR -> Combo_Colors RGB). Rules needed: weight split, drag (FM4 = lbf at 100 mph),
+     springs, anti-roll and LSD (FM4 presets), dampers, brakes (disc size ~ torque / 330). FM4's drivetrain parts hang
+     on List_UpgradeDrivetrain.DrivetrainID. The F:\ FM4 DB still has Supra test rows (DrivetrainID 461, unused).
+   - [x] export (2026-10-20, user: "fai un json da esportare ed il relativo tracciato da passare poi a forza studio"):
+     `gtdev car-json <DB0106.dat> <out dir> <label>...`, layout in `docs/car_json.md` (format `gt-car-data` v1): GT6
+     values in SI, FM4 fields with table / row / column / kind (copy, lookup, estimate, default), the full throttle
+     torque curve, the paints. 10 cars in `tests\car_json`; drive, powertrain, engine config and cylinder ids equal
+     to FM4 on the 9 compared cars (aspiration: twin turbo not in GT6, flagged estimate).
+   - [ ] Forza Studio side: import the JSON into a target car (separate chat / repo).
 
 ## Next
 
