@@ -6,15 +6,31 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-(empty)
+13. **Paint colours and a truer view** (user 2026-10-19: "facciamo 1/2 e poi 9c")
+   - [ ] a. **paint colour**: GT6 database VARIATION (name, `ColorChip` = 0x00BBGGRR: MX-5 Classic Red 0x060181 =
+     129 1 6, the colour of its colour-shift image) and GENERIC_CAR.MainColor (default), `Gt6SpecDb.Paints`. GT6
+     bodies repeat their material table once per variation (MX-5: blocks of 85, m0 / m85 / m170 / m255 =
+     `_BODY_DIRT_CLR_VARI_0..3`, then a `_PaintExtraBRDF` block); shapes use block 0, variation k = block k
+     (`Mdl3TextureSet.Material`, `gtdev tex-full --vari <body>`). V = number of colours (MX-5 4, RX-8 0001/0097 7):
+     colour i = variation i; else variation 0 and the database colour. The database colour goes on the paint
+     materials (colour-shift image changes with the variation; the soft top's does not). Viewer: **Paint colour**
+     list (with colour chips) over the switches; the export uses the chosen paint (every part of the car).
+     `--shot ... --paint N`. Checked: MX-5 red / white / blue / silver, RX-8 white / red (`tests\paint`).
+     GT5 bodies have no colour variations (the list is not shown).
+   - [ ] b. **viewer**: mip levels made on the GPU + anisotropic filter (big liveries shimmer less); material
+     **render states** read (`Mdl3RenderState`: RSX 0x304.. alpha test / blend / factors, depth write, cull):
+     GT5 decals SRC_ALPHA/ONE_MINUS_SRC_ALPHA drawn blended after the opaque parts without depth write, `CAdd`
+     SRC_ALPHA/ONE additive, alpha test GREATER 64 cut out; GT6 materials are almost all opaque (glass too: its look
+     is in the shader). **Vertex occlusion**: GT6 `colorSet1` darkens the parts (View > Vertex occlusion, on;
+     `--no-ao`). The R18's fine stripes are its carbon texture (32x32 tiled ~50 times, alpha mask), not a decoding error.
+   **To check by the user**
 
 ## Next
 
-(empty)
-
+- 9c. GT car data -> Forza Studio (export JSON / CSV + FM4 field mapping), see item 9.
 ## Closed by the user on 2026-10-19 (12, 11.1, 11.2)
 
-12. **Readable object names in ZModeler** (user: "mi piacerebbe assai"; closed: "ci siamo") â€” ZModeler 2.2.6 ignores OBJ `o`/`g` and
+12. **Readable object names in ZModeler** (user: "mi piacerebbe assai"; closed: "ci siamo") — ZModeler 2.2.6 ignores OBJ `o`/`g` and
    names the objects after `usemtl`: write one material per object, named like the object (`black.s14`,
    `BODY.bonnet.s169`), same texture and colour, so the objects are readable in ZModeler. Viewer export and `gtdev`.
    - [x] a. one material per object (`GTFormats/Mdl3/ObjMaterials.cs`, shared by the viewer and `gtdev mdl3-obj`):
@@ -70,7 +86,7 @@ Tests and dumps: `tests\<topic>` (not committed).
 ## Closed by the user on 2026-10-19 (7, 8, 9)
 
 7. **Materials and textures for display** (closed: "the materials show"; the search for every texture in the game
-   files goes on as 12c) â€” every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
+   files goes on as 12c) — every sampler of a material to its texture (`gtdev mdl3-samplers`: diffuse,
    ambient, specular, alpha, normal, dirt, emission...; texture names keep the Polyphony source paths), then the
    external ones (sampler 0x8000 | n, provided by the game):
    - race numbers / plates (`Decken`, `number_f/r`, rally plaque): GT5 `car\decken` holds 402 TXS3 files (`a.00`...);
@@ -78,7 +94,7 @@ Tests and dumps: `tests\<topic>` (not committed).
    - paint colour shift (`*_PaintExtraBRDF` reflect/scatter, GT6): the `body_s` `/` sub streams (one per paint colour,
      `ReflectColorShiftBRDF` / `ScatterColorShiftBRDF` images); the paint colour itself comes from the car data (specdb).
    GT5 has almost none (50 references, decals); GT6 thousands.
-8. **Car list ("open game folder")** (closed: "we have a car list that shows easily what we open") â€” pick a car by name instead of by id, as in Forza Studio:
+8. **Car list ("open game folder")** (closed: "we have a car list that shows easily what we open") — pick a car by name instead of by id, as in Forza Studio:
    - GT5: `specdb\GT5_JP3009` (GTDB tables, readable with PDTools.SpecDB, MIT): `VARIATION.ModelCode` = the model folder
      name (`00010075`; 1017 of 1088 found as strings in `UnistrDB.sdb`), `GENERIC_CAR` label (`rx7_spiritr_a_02`),
      `CAR_NAME_<language>` (name, grade, short name), maker, year;
@@ -98,7 +114,7 @@ Tests and dumps: `tests\<topic>` (not committed).
    tyres, colours; GT5 cars use the GT6 row, 1064 / 1088). Fixed: GT6 names were shown as "(guessed)". UI checked
    off screen with `GTViewer --ui-shot <root> <tab> <search> <out.png>`. **To check by the user.**
 9. **Car data from the spec databases** (closed for now: "the data we read is enough as a base"; b and c left, not
-   planned) â€” the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
+   planned) — the real specs of every car, GT5 (GTDB) and GT6 (SQLite, 65
    tables, `gtdev gt6-specdb`): engine (power, torque curve torqueA-X over rpmA-X, rev limit, sound), chassis (mass,
    size, weight split, cd/cl, ride height), gears and final drive, drivetrain, suspension (springs, dampers, camber,
    toe, anti-roll), brakes, tyres, colours (VARIATION: names per paint = the `body_s` colour slots of item 5a), custom
@@ -118,8 +134,8 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Done
 
-- **1. Project setup** (2026-10-17) â€” repo, solution (`GTFormats`, `GTViewer`, `gtdev`), license, notices.
-- **2. MDL3 inventory** (2026-10-17) â€” header and every table of 24,922 MDL3 explained; findings in `docs/mdl3.md`.
+- **1. Project setup** (2026-10-17) — repo, solution (`GTFormats`, `GTViewer`, `gtdev`), license, notices.
+- **2. MDL3 inventory** (2026-10-17) — header and every table of 24,922 MDL3 explained; findings in `docs/mdl3.md`.
 
   Read the header and top-level tables of every MDL3 in GT5 (`car\hq`, `car\race`,
   `car\interior`, `wheel`) and GT6 (`car\...\body`, `wheel`, `interior`).
@@ -144,7 +160,7 @@ Tests and dumps: `tests\<topic>` (not committed).
   Open (data located, meaning unknown): material block +04, 0x78 n, 0xB0 +28..+2E, a few u16 fields; 17 old v1/v2/v4 files not covered.
   For item 4: GT5 packed geometry (0x94 + shape packed refs, looks like PS3 Edge), GT6 PMSH data (exact sizes known).
   For item 5: stream map 0xDC lists the `body_s` deflate chunks.
-- **3. TXS3 textures** (2026-10-17) â€” every in-file image decodes, GT6 body pixels found in `body_s`; findings in `docs/txs3.md`.
+- **3. TXS3 textures** (2026-10-17) — every in-file image decodes, GT6 body pixels found in `body_s`; findings in `docs/txs3.md`.
   Reference: Nenkai's TXS3Converter (MIT, cloned in `ref\TXS3Converter`, uses PDTools' TextureSet3 and PS3 Swizzler).
 
 - [x] 3a. Formats (`gtdev txs3-survey`): only DXT1/DXT23/DXT45/A8R8G8B8 (swizzled or linear); image record fully mapped
@@ -157,7 +173,7 @@ Tests and dumps: `tests\<topic>` (not committed).
   each stream = deflate/raw chunks -> bundle (header with shape + image tables, then data); all 168,414 offset-0 images
   found and decoded, 0 failures; extra copies in variant bundles are identical; `txs3-png` reads them. RX-8 checked visually.
   Open for item 5: `/` sub streams = paint colours? (BRDF images), shape data in the bundles
-- **4. Geometry** (2026-10-18, **closed with reservations** by the user, for very small parts) â€” every shape of every
+- **4. Geometry** (2026-10-18, **closed with reservations** by the user, for very small parts) — every shape of every
   GT5/GT6 car, interior, wheel, tire and carparts file decodes to triangles (positions, normals, UVs); OBJ/glTF export
   checked by the user in ZModeler 2.2.6; findings in `docs/mdl3.md`. Reservations, left open:
   - 3 GT5 race shapes: 00800005 shapes 75 and 119 have 1 vertex 1 mm outside the box (known), 00740016 shape 72 has
@@ -188,7 +204,7 @@ Tests and dumps: `tests\<topic>` (not committed).
 - [x] 4e. Check over every car file (`gtdev mesh-check`, `tests\mesh_check`): about 900,000 shapes, **all decode** with the
   shared decoder. Found on the way: GT5 plain triangle strips (shape flags nibble 6, restart +20), S1 shadow positions =
   raw / 2^k (k from the shape bbox; where the game stores it is open), empty tire templates
-- **5. GT6 `body_s`** (closed 2026-10-18) â€” colour variations, custom parts (op54), GT5 vs GT6; findings in `docs/mdl3.md`.
+- **5. GT6 `body_s`** (closed 2026-10-18) — colour variations, custom parts (op54), GT5 vs GT6; findings in `docs/mdl3.md`.
   Container known (3d: stream map, bundles, images), shape data decoded (4d). Explain what the parts of the stream map
   are for. Done when every `/` sub stream and every `custom_*` item of the 2454 GT6 bodies has a known meaning (checked
   against the game data) and the GT6 vs GT5 differences of the same car are written down.
@@ -233,21 +249,21 @@ and finds the tree and the 3D view right.
   Livery "messed up" on the Castrol Supra (user, 2026-10-18): the UVs are transformed by each material's vertex
   program (MOV / MUL x1, x2, x4, x8 / MAD with the runtime `UVShiftControl`): `Mdl3UvScale`, applied in
   `Mdl3Mesh.Decode` (viewer and exports); see docs/mdl3.md "UV transform"
-- [ ] 6f. Car list by name (requested by the user during 6, takes the first part of item 8): File > Open game folder
+- [x] 6f. Car list by name (checked by the user 2026-10-19) (requested by the user during 6, takes the first part of item 8): File > Open game folder
   (Ctrl+G) on GT5_VOL or GT6_VOL -> list with search, year, files, thumbnail; buttons open hq/race body, interior,
   wheels; the car name goes in the title and the tree root. `GtDb` (GTDB reader, re-implemented from PDTools.SpecDB,
   MIT) + `CarCatalog`; `gtdev car-list <root> <out.tsv>`, `gtdev specdb-dump`. GT5: 1088/1088 named from the specdb
   (VARIATION.ModelCode -> CAR_NAME_british, GENERIC_CAR year), all with thumbnail. GT6: 1024 from the GT5 specdb
   next to it, 169 guessed from the Maya project paths in the model (shown as guessed), 34 without name; 1063
   thumbnails (stand-alone TXS3, `Txs3Image.DecodeFile`). Used by the user
-- [ ] 6e. File > Export visible to OBJ (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
+- [x] 6e. File > Export visible to OBJ (checked by the user 2026-10-19) (+ MTL + PNG): what is shown, current switches and LOD (Demio body: 99 objects,
   152,758 faces). **To check by the user in ZModeler**
 
 Exports must work in ZModeler 2.2.6: OBJ only (the user does not want 3DS; glTF is not read there). ZModeler 2 ignores
 OBJ `o`/`g` and names the objects after the `usemtl` material (`m000`...): readable names there would need one
 material name per shape (later).
 
-- **10. LOD levels** (closed by the user 2026-10-18; request from the AEM S2000 GT6 race body) â€” "confusion with the LODs, I need to
+- **10. LOD levels** (closed by the user 2026-10-18; request from the AEM S2000 GT6 race body) — "confusion with the LODs, I need to
   extract them too": the viewer drew the high and low shapes of GT6 premium bodies on top of each other, the LOD
   picker listed 14 levels from Maya `LEVEL_n` nodes (numbered per part), half the shapes were named `shapeNN`.
   - a. model command **op8 = LOD select** (PS2 `LODSelect` in PDTools): one distance per level and one u16 jump per
@@ -264,7 +280,7 @@ material name per shape (later).
   Count per file (`mdl3-scene` survey): GT5 race 199 files with 5 levels + 33 with 6 (likely premium), 853 with 1;
   GT6 race body 515 with 2, 48 with 3, 660 with 1 (same 787B: GT5 5 levels, GT6 2). GT5 levels = same vertices, fewer
   triangles; GT6 levels = separate meshes. GT5 race levels as low LODs of GT6 cars: **rejected by the user** (2026-10-19).
-- **11. Texture viewer** (closed by the user 2026-10-19; "first a viewer of textures only", before item 7) â€” a window that lists
+- **11. Texture viewer** (closed by the user 2026-10-19; "first a viewer of textures only", before item 7) — a window that lists
   every TXS3 image of the open file (GT6 bodies: pixels from `body_s`) or of a stand-alone TXS3 file (thumbnails,
   `decken`): thumbnail, texture names, size, format, mips, cube / 3D, the materials and samplers that use it, and the
   external samplers (provided by the game). Big view with zoom, RGB / alpha / RGBA, faces and slices of cubes and 3D

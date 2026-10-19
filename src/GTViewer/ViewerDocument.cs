@@ -39,7 +39,43 @@ public sealed class ViewerDocument : IDisposable
         for (int s = 0; s < File.Shapes.Count; s++)
             try { packed = Math.Max(packed, Mdl3Mesh.LodCount(File, s)); } catch { }
         LodCount = Math.Max(Math.Max(1, Scene.Levels), packed);
+        LoadPaints();
     }
+
+    /// <summary>The car's paints from the GT6 database (name, colour), empty when unknown or the model has no colour variations.</summary>
+    public List<(string Name, Vector3 Color)> Paints { get; } = [];
+    public int Paint { get; private set; } = -1;
+
+    /// <summary>
+    /// GT6 paints (ROADMAP 13): the database colours of the car (model code from the path, VARIATION.ColorChip);
+    /// the default one (MainColor) is applied. Only for bodies with `_CLR_VARI_` materials.
+    /// </summary>
+    public void LoadPaints()
+    {
+        try
+        {
+            if (TextureSet.VariationCount == 0 || GTFormats.SpecDb.CarCatalog.FromModelPath(Path) is not { } car) return;
+            string? carDir = Mdl3TextureSet.CarFolder(System.IO.Path.GetFullPath(Path));
+            if (carDir == null || GTFormats.SpecDb.CarCatalog.FindGt6SpecDb(System.IO.Path.GetDirectoryName(carDir)!) is not { } f) return;
+            using var db = GTFormats.SpecDb.Gt6SpecDb.Open(f);
+            var (list, main) = db.Paints(long.Parse(car.Code));
+            foreach (var p in list) Paints.Add((p.Name.Length > 0 ? p.Name : $"colour {Paints.Count + 1}", new Vector3(p.R, p.G, p.B) / 255f));
+            if (Paints.Count > 0) SetPaint(main);
+        }
+        catch { Paints.Clear(); }
+    }
+
+    /// <summary>Paint i: its colour on the paint materials, variation i when the body has one per colour (else 0).</summary>
+    public void SetPaint(int i)
+    {
+        if (i < 0 || i >= Paints.Count) return;
+        Paint = i;
+        int v = TextureSet.VariationCount;
+        TextureSet.SetPaint(v == Paints.Count || i < v ? i : 0, Paints[i].Color);
+    }
+
+    /// <summary>The material a shape is drawn with (the current colour variation).</summary>
+    public int MaterialOf(int shape) => TextureSet.Material(File.Shapes[shape].MaterialIndex);
 
     /// <summary>A node is shown when neither it nor any parent is hidden.</summary>
     public bool IsShown(Mdl3SceneNode n)
@@ -67,7 +103,8 @@ public sealed class ViewerDocument : IDisposable
                 var nrm = mesh.Normals ?? Mdl3Mesh.FaceNormals(p, mesh.Indices);
                 var v = new GpuVertex[p.Length];
                 for (int i = 0; i < p.Length; i++)
-                    v[i] = new GpuVertex(p[i], i < nrm.Length ? nrm[i] : Vector3.UnitY, mesh.Uvs != null && i < mesh.Uvs.Length ? mesh.Uvs[i] : Vector2.Zero);
+                    v[i] = new GpuVertex(p[i], i < nrm.Length ? nrm[i] : Vector3.UnitY, mesh.Uvs != null && i < mesh.Uvs.Length ? mesh.Uvs[i] : Vector2.Zero,
+                        mesh.Colors != null && i < mesh.Colors.Length ? mesh.Colors[i] : Vector4.One);
                 var idx = mesh.Indices.Where(i => i >= 0 && i < p.Length).ToArray();
                 if (idx.Length % 3 != 0) idx = idx[..(idx.Length / 3 * 3)];
                 m = p.Length == 0 || idx.Length == 0 ? null : renderer.CreateMesh(v, idx);
@@ -119,6 +156,22 @@ public sealed class ViewerDocument : IDisposable
         try { return Mdl3Mesh.Decode(File, shape, lod, out _); } catch { return null; }
     }
 
+    /// <summary>
+    /// How the game blends a material (its RSX render state): SRC_ALPHA / ONE_MINUS_SRC_ALPHA = blend (GT5 decals),
+    /// SRC_ALPHA / ONE = additive (GT5 CAdd), alpha test GREATER ref = cut out; else opaque. Most GT6 materials are opaque.
+    /// </summary>
+    (BlendMode, float) Mode(int material)
+    {
+        if (material < 0 || material >= File.Materials.Count) return (BlendMode.Opaque, 0);
+        int s = File.Materials[material].StateIndex;
+        if (s < 0 || s >= File.RenderStates.Count || !File.RenderStates[s].Valid) return (BlendMode.Opaque, 0);
+        var st = File.RenderStates[s];
+        if (st.Blend && st.DstFactor == 1) return (BlendMode.Additive, 0);
+        if (st.AlphaBlend) return (BlendMode.Blend, 0);
+        if (st.AlphaTest && st.AlphaFunc == 0x204 && st.AlphaRef > 0) return (BlendMode.AlphaTest, st.AlphaRef / 255f);   // GREATER
+        return (BlendMode.Opaque, 0);
+    }
+
     /// <summary>A soft colour per material, so the parts can be told apart without textures.</summary>
     public static Vector4 MaterialColor(int material)
     {
@@ -136,12 +189,13 @@ public sealed class ViewerDocument : IDisposable
         {
             var mesh = Mesh(n.Shape, out _);
             if (mesh == null) continue;
-            int mat = File.Shapes[n.Shape].MaterialIndex;
+            int mat = MaterialOf(n.Shape);
             // Textures on: the material's texture over its colour (paint, constant or shader colour: ROADMAP 12c);
             // off: a soft colour per material, to tell the parts apart
             var tex = Textures ? DiffuseTexture(mat) : null;
             var color = Textures ? new Vector4(TextureSet.Look(mat).Color, 1) : MaterialColor(mat);
-            items.Add(new DrawItem(mesh, color, tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model)));
+            var (mode, alphaRef) = Mode(mat);
+            items.Add(new DrawItem(mesh, color, tex, Selected != null && Selected.Shape == n.Shape && (Selected.Model == n.Model), tex != null ? mode : BlendMode.Opaque, alphaRef));
             min = Vector3.Min(min, mesh.Min); max = Vector3.Max(max, mesh.Max);
         }
         if (items.Count == 0) { min = -Vector3.One; max = Vector3.One; }

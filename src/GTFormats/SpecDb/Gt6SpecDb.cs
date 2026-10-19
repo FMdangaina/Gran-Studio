@@ -163,6 +163,33 @@ public sealed class Gt6SpecDb : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// The paints of a car (model code, else its label) in VarOrder: name and colour (VARIATION.ColorChip = 0x00BBGGRR,
+    /// the body paint: MX-5 Classic Red 0x060181 = 129 1 6, the same as its colour-shift image), and the default one
+    /// (GENERIC_CAR.MainColor, an index in that order). Empty when the car is not in the database.
+    /// </summary>
+    public (List<(string Name, byte R, byte G, byte B)> Paints, int Default) Paints(long modelCode, string? label = null)
+    {
+        var list = new List<(string, byte, byte, byte)>();
+        int main = 0;
+        using var c = Connection.CreateCommand();
+        c.CommandText = """
+            SELECT v.NameEng, v.ColorChip, g.MainColor FROM GENERIC_CAR g JOIN VARIATION v ON v.Label = g.CarLabel
+            WHERE g.CarLabel = (SELECT CarLabel FROM GENERIC_CAR WHERE ModelCode = $m OR CarLabel = $l ORDER BY ModelCode = $m DESC LIMIT 1)
+            ORDER BY v.VarOrder
+            """;
+        c.Parameters.AddWithValue("$m", modelCode);
+        c.Parameters.AddWithValue("$l", label == null ? "" : label.EndsWith("_std") ? label[..^4] : label);
+        using var r = c.ExecuteReader();
+        while (r.Read())
+        {
+            long chip = r.IsDBNull(1) ? 0 : r.GetInt64(1);
+            list.Add((r.IsDBNull(0) ? "" : r.GetString(0), (byte)chip, (byte)(chip >> 8), (byte)(chip >> 16)));
+            main = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+        }
+        return (list, Math.Clamp(main, 0, Math.Max(0, list.Count - 1)));
+    }
+
     /// <summary>The colour names of a car in VarOrder (the paint variations of body_s, item 5a).</summary>
     public List<string> ColorNames(string label)
     {

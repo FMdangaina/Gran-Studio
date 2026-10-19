@@ -76,6 +76,7 @@ static class ObjExport
                 bool open = Path.GetFullPath(file).Equals(Path.GetFullPath(doc.Path), StringComparison.OrdinalIgnoreCase);
                 using var part = open ? null : new ViewerDocument(file, renderer);
                 var d = part ?? doc;
+                if (part != null && doc.Paint >= 0 && part.Paints.Count == doc.Paints.Count) part.SetPaint(doc.Paint);   // the same paint on every part
                 if (!d.VisibleShapes().Any()) return $"no shapes in {Path.GetFileName(Path.GetDirectoryName(file))}\\{Path.GetFileName(file)}, not exported (GT5: the cockpit is in the hq body)";
                 return Levels(WriteLods(d, folder, stem, lodFolders, textures));
             }
@@ -104,7 +105,7 @@ static class ObjExport
             for (var p = n.Parent; p != null && p.Kind != "file"; p = p.Parent) groups.Insert(0, p.Name);
             obj.AppendLine($"g {string.Join('/', groups)}");
             obj.AppendLine($"o {n.Name}");
-            obj.AppendLine($"usemtl {materials.Add(n.Name, sh.MaterialIndex)}");
+            obj.AppendLine($"usemtl {materials.Add(n.Name, doc.MaterialOf(n.Shape))}");
             var nrm = mesh.Normals ?? Mdl3Mesh.FaceNormals(mesh.Positions, mesh.Indices);
             foreach (var v in mesh.Positions) obj.AppendLine(string.Create(ci, $"v {v.X} {v.Y} {v.Z}"));
             foreach (var t in mesh.Uvs ?? new System.Numerics.Vector2[mesh.Positions.Length]) obj.AppendLine(string.Create(ci, $"vt {t.X} {1 - t.Y}"));

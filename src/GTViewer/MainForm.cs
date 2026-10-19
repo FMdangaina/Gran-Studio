@@ -51,6 +51,9 @@ public sealed class MainForm : Form
         var viewMenu = new ToolStripMenuItem("&View");
         viewMenu.DropDownItems.Add(wireItem);
         viewMenu.DropDownItems.Add(texItem);
+        var aoItem = new ToolStripMenuItem("Vertex &occlusion (GT6 shading)") { CheckOnClick = true, Checked = true };
+        aoItem.CheckedChanged += (_, _) => { renderer!.VertexOcclusion = aoItem.Checked; view.Invalidate(); };
+        viewMenu.DropDownItems.Add(aoItem);
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("Te&xture browser (tab)", null, (_, _) => tabs.SelectedTab = tabs.SelectedTab == texturesTab ? viewTab : texturesTab) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.T });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("&Frame all", null, (_, _) => FrameAll()) { ShortcutKeyDisplayString = "F" });
         viewMenu.DropDownItems.Add(new ToolStripMenuItem("Frame &selected", null, (_, _) => FrameSelected()) { ShortcutKeyDisplayString = "S" });
@@ -312,6 +315,26 @@ public sealed class MainForm : Form
             lod.SelectedIndexChanged += (_, _) => { doc.Lod = lod.SelectedIndex; UpdateTreeColors(); UpdateStatus(); view.Invalidate(); };
             switches.Controls.Add(lod);
         }
+        // GT6 paint colours from the database (ROADMAP 13): the colour of the body and the matching variation
+        if (doc.Paints.Count > 0)
+        {
+            switches.Controls.Add(new Label { Text = "Paint colour", AutoSize = true, Margin = new Padding(3, 6, 3, 0) });
+            var paint = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = width, DrawMode = DrawMode.OwnerDrawFixed };
+            foreach (var p in doc.Paints) paint.Items.Add(p.Name);
+            paint.DrawItem += (_, e) =>
+            {
+                e.DrawBackground();
+                if (e.Index < 0) return;
+                var c = doc.Paints[e.Index].Color;
+                using var b = new SolidBrush(Color.FromArgb((int)(c.X * 255), (int)(c.Y * 255), (int)(c.Z * 255)));
+                e.Graphics.FillRectangle(b, e.Bounds.X + 2, e.Bounds.Y + 2, 24, e.Bounds.Height - 4);
+                e.Graphics.DrawRectangle(Pens.Gray, e.Bounds.X + 2, e.Bounds.Y + 2, 24, e.Bounds.Height - 4);
+                TextRenderer.DrawText(e.Graphics, doc.Paints[e.Index].Name, e.Font, new Point(e.Bounds.X + 30, e.Bounds.Y + 1), e.ForeColor);
+            };
+            paint.SelectedIndex = Math.Max(0, doc.Paint);
+            paint.SelectedIndexChanged += (_, _) => { doc.SetPaint(paint.SelectedIndex); view.Invalidate(); };
+            switches.Controls.Add(paint);
+        }
         // custom parts first, then the state switches
         foreach (var s in doc.Scene.Selectors.OrderBy(s => s.Opcode == 54 ? 0 : 1).ThenBy(s => s.Name))
         {
@@ -351,11 +374,12 @@ public sealed class MainForm : Form
             return $"{n.Kind} {n.Name}: {shapes} shape(s)";
         }
         var sh = f.Shapes[n.Shape];
-        string mat = sh.MaterialIndex >= 0 && sh.MaterialIndex < f.Materials.Count ? f.Materials[sh.MaterialIndex].Name : "-";
+        int mi = doc.MaterialOf(n.Shape);
+        string mat = mi >= 0 && mi < f.Materials.Count ? $"{f.Materials[mi].Name} ({doc.TextureSet.Look(mi).ColorSource})" : "-";
         var mesh = doc.Mesh(n.Shape, out var why);
         string geo = mesh == null ? $"no mesh: {why}" : $"{mesh.IndexCount / 3} triangles";
         string path = f.ShapeNames.TryGetValue(n.Shape, out var p) ? p[0] : "";
-        return $"shape {n.Shape}  material {sh.MaterialIndex} {mat}  {geo}  |  {path}";
+        return $"shape {n.Shape}  material {mi} {mat}  {geo}  |  {path}";
     }
 
     void OnViewMouseMove(object? sender, MouseEventArgs e)

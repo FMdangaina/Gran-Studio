@@ -10,7 +10,8 @@ static class TexFull
 {
     public static int Run(string[] args)
     {
-        if (args.Length < 2) { Console.Error.WriteLine("tex-full <out.txt> <file>..."); return 1; }
+        if (args.Length < 2) { Console.Error.WriteLine("tex-full <out.txt> <file>... | tex-full --vari <file>"); return 1; }
+        if (args[0] == "--vari") return Variations(args[1]);
         var ci = CultureInfo.InvariantCulture;
         using var w = new StreamWriter(args[0]);
         var total = new Dictionary<string, int>();
@@ -35,6 +36,7 @@ static class TexFull
                 why[reason] = why.GetValueOrDefault(reason) + g.Count();
                 total[reason] = total.GetValueOrDefault(reason) + g.Count();
                 w.WriteLine($"  m{g.Key} '{mat.Name}' [{data?.Name}] {g.Count()} shapes, diffuse: {state}");
+                w.WriteLine($"      render state {mat.StateIndex}: {(mat.StateIndex >= 0 && mat.StateIndex < m.RenderStates.Count ? m.RenderStates[mat.StateIndex].ToString() : "-")}");
                 foreach (var k in mat.Samplers.Where(k => k.Sampler != "diffuseMapSampler"))
                     w.WriteLine($"      {k.Sampler}: {Status(m, set, mat, k.Sampler)}");
                 if (data != null)
@@ -71,6 +73,27 @@ static class TexFull
         w.WriteLine($"ALL: {string.Join(", ", total.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value}"))}");
         w.WriteLine($"constant names (materials): {string.Join(", ", constantKeys.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value}"))}");
         Console.WriteLine($"{args.Length - 1} files -> {args[0]}");
+        return 0;
+    }
+
+    /// <summary>--vari: every _CLR_VARI_k material (used by a shape or not), its colour-shift images and their first pixel.</summary>
+    static int Variations(string path)
+    {
+        var m = Mdl3File.Load(path);
+        var set = new Mdl3TextureSet(m);
+        var used = Enumerable.Range(0, m.Shapes.Count).Select(s => (int)m.Shapes[s].MaterialIndex).ToHashSet();
+        for (int i = 0; i < m.Materials.Count; i++)
+        {
+            var mat = m.Materials[i];
+            if (!mat.Name.Contains("_CLR_VARI_")) continue;
+            var imgs = mat.Samplers.Where(k => !k.External && k.Index < m.TextureInfos.Count).Select(k =>
+            {
+                int img = m.TextureInfos[k.Index].ImageIndex;
+                var px = img < set.Entries.Count ? set.Decode(img) : null;
+                return $"{k.Sampler.Replace("MapSampler", "")}=img{img}{(px != null ? $"({px[0]},{px[1]},{px[2]})" : "")}";
+            });
+            Console.WriteLine($"m{i,-4} {(used.Contains(i) ? "used" : "    ")} {mat.Name,-50} {string.Join(" ", imgs)}");
+        }
         return 0;
     }
 

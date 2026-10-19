@@ -12,6 +12,7 @@ public sealed class Mdl3File
     public List<Mdl3Material> Materials { get; } = [];
     public List<Mdl3MaterialData> MaterialData { get; } = [];
     public List<Mdl3TextureInfo> TextureInfos { get; } = [];
+    public List<Mdl3RenderState> RenderStates { get; } = [];
     public Dictionary<int, string> ModelNames { get; } = [];
     public Dictionary<int, List<string>> ShapeNames { get; } = [];
 
@@ -33,6 +34,7 @@ public sealed class Mdl3File
         const int mat = 0xE4;
         for (int i = 0; i < Data.U16(mat); i++) Materials.Add(Mdl3Material.Read(Data, (int)Data.U32(mat + 8) + i * Mdl3Material.Size));
         for (int i = 0; i < Data.U16(mat + 2); i++) MaterialData.Add(Mdl3MaterialData.Read(Data, (int)Data.U32(mat + 0x0C) + i * Mdl3MaterialData.Size));
+        for (int i = 0; i < Data.U8(mat + 5); i++) RenderStates.Add(Mdl3RenderState.Read(Data, (int)Data.U32(mat + 0x10) + i * Mdl3RenderState.Size));
         for (int i = 0; i < Data.U16(mat + 6); i++) TextureInfos.Add(Mdl3TextureInfo.Read(Data, (int)Data.U32(mat + 0x14) + i * Mdl3TextureInfo.Size));
 
         foreach (var (name, index) in Keys(0x12, 0x34)) ModelNames[index] = name;

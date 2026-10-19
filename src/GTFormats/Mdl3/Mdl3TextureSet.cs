@@ -222,6 +222,78 @@ public sealed class Mdl3TextureSet
         return f != null && System.IO.File.Exists(f) ? f : null;
     }
 
+    // ---- paint colour (ROADMAP 13): GT6 colour variations _CLR_VARI_k ----
+
+    int variationBlock = -1;   // material table offset between variation k and k + 1, 0 none (filled on first use)
+    int variationCount;
+
+    /// <summary>
+    /// GT6 bodies repeat their whole material table once per colour variation (MX-5: m0, m85, m170, m255 =
+    /// `_BODY_DIRT_CLR_VARI_0..3`), then once for the `_PaintExtraBRDF` paints; the shapes use the first block and the
+    /// game moves to block k for variation k. Variations (V) are not always the colours: V = number of colours (MX-5: 4)
+    /// or 1 (RX-8: 7 colours, the colour from the database). Returns V (0 = no variations).
+    /// </summary>
+    public int VariationCount { get { FindVariations(); return variationCount; } }
+
+    /// <summary>The variation shown (0 .. VariationCount - 1).</summary>
+    public int Variation { get; private set; }
+
+    /// <summary>The body paint colour (database ColorChip), null = the colour of the variation's colour-shift image.</summary>
+    public System.Numerics.Vector3? PaintColor { get; private set; }
+
+    public void SetPaint(int variation, System.Numerics.Vector3? color)
+    {
+        FindVariations();
+        lock (looks)
+        {
+            Variation = Math.Clamp(variation, 0, Math.Max(0, variationCount - 1));
+            PaintColor = color;
+            looks.Clear();
+        }
+    }
+
+    void FindVariations()
+    {
+        if (variationBlock >= 0 || File == null) return;
+        variationBlock = 0;
+        var mats = File.Materials;
+        var rx = new System.Text.RegularExpressions.Regex(@"_CLR_VARI_(\d+)$");
+        int top = -1;
+        foreach (var m in mats) if (rx.Match(m.Name) is { Success: true } x) top = Math.Max(top, int.Parse(x.Groups[1].Value));
+        variationCount = top + 1;
+        for (int i = 0; i < mats.Count && variationCount > 1; i++)
+            if (mats[i].Name.EndsWith("_CLR_VARI_0"))
+            {
+                string next = mats[i].Name[..^1] + "1";
+                int j = mats.FindIndex(i + 1, m => m.Name == next);
+                if (j > i) { variationBlock = j - i; break; }
+            }
+    }
+
+    /// <summary>The material drawn for a shape's material with the current variation (the same index for variation 0).</summary>
+    public int Material(int material)
+    {
+        FindVariations();
+        if (File == null || Variation == 0 || variationBlock <= 0 || material < 0) return material;
+        int target = material + Variation * variationBlock;
+        if (target >= File.Materials.Count) return material;
+        string a = File.Materials[material].Name, b = File.Materials[target].Name;
+        // the same material of the other block: same name, or _CLR_VARI_0 -> _CLR_VARI_k
+        return b == a || a.EndsWith("_CLR_VARI_0") && b == a[..^1] + Variation || a.Contains("_CLR_VARI_") && b.StartsWith(a[..a.IndexOf("_CLR_VARI_")]) ? target : material;
+    }
+
+    /// <summary>A body paint material: its colour-shift image changes with the variation (the soft top's does not), or V = 1.</summary>
+    bool IsPaint(int material)
+    {
+        if (File == null || !File.Materials[material].Name.Contains("_CLR_VARI_")) return false;
+        if (variationCount <= 1 || variationBlock <= 0) return true;
+        // compare with the same material in the other variation block
+        int baseMat = material % variationBlock, other = baseMat + variationBlock;
+        if (other >= File.Materials.Count) return true;
+        int? Img(int mi) => File.Materials[mi]["scatterColorShiftMapSampler"] is { External: false } k && k.Index < File.TextureInfos.Count ? File.TextureInfos[k.Index].ImageIndex : null;
+        return Img(baseMat) != Img(other);
+    }
+
     // ---- what a material looks like (viewer colour and texture, export Kd and map_Kd) ----
 
     readonly Dictionary<int, Mdl3Look> looks = [];
@@ -260,6 +332,7 @@ public sealed class Mdl3TextureSet
         foreach (var ci in new[] { "scatterColorShiftMapSampler", "reflectColorShiftMapSampler" }.Select(s => Image(mat[s])).OfType<int>().OrderBy(i => Entries[i].Record.Height == 1 ? 0 : 1))
             if ((mat.Name.Contains("_CLR_VARI_") || Entries[ci].Record.Width <= 4 && Entries[ci].Record.Height == 1) && Decode(ci) is { } px)
             {
+                if (PaintColor is { } paint && IsPaint(material)) return new(paint, "paint (database colour)", image, sampler);
                 int w = Entries[ci].Record.Width;
                 var sum = System.Numerics.Vector3.Zero;
                 for (int x = 0; x < w; x++) sum += new System.Numerics.Vector3(px[x * 4], px[x * 4 + 1], px[x * 4 + 2]);
