@@ -6,8 +6,16 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-13. **Paint colours and a truer view** (user 2026-10-19: "facciamo 1/2 e poi 9c")
-   - [ ] a. **paint colour**: GT6 database VARIATION (name, `ColorChip` = 0x00BBGGRR: MX-5 Classic Red 0x060181 =
+9c. GT car data -> Forza Studio (export JSON / CSV + FM4 field mapping), see item 9.
+
+## Next
+
+(empty)
+
+## Closed by the user on 2026-10-19 (13)
+
+13. **Paint colours and a truer view** (user 2026-10-19: "facciamo 1/2 e poi 9c"; closed: "ottimo lavoro")
+   - [x] a. **paint colour**: GT6 database VARIATION (name, `ColorChip` = 0x00BBGGRR: MX-5 Classic Red 0x060181 =
      129 1 6, the colour of its colour-shift image) and GENERIC_CAR.MainColor (default), `Gt6SpecDb.Paints`. GT6
      bodies repeat their material table once per variation (MX-5: blocks of 85, m0 / m85 / m170 / m255 =
      `_BODY_DIRT_CLR_VARI_0..3`, then a `_PaintExtraBRDF` block); shapes use block 0, variation k = block k
@@ -17,17 +25,14 @@ Tests and dumps: `tests\<topic>` (not committed).
      list (with colour chips) over the switches; the export uses the chosen paint (every part of the car).
      `--shot ... --paint N`. Checked: MX-5 red / white / blue / silver, RX-8 white / red (`tests\paint`).
      GT5 bodies have no colour variations (the list is not shown).
-   - [ ] b. **viewer**: mip levels made on the GPU + anisotropic filter (big liveries shimmer less); material
+   - [x] b. **viewer**: mip levels made on the GPU + anisotropic filter (big liveries shimmer less); material
      **render states** read (`Mdl3RenderState`: RSX 0x304.. alpha test / blend / factors, depth write, cull):
      GT5 decals SRC_ALPHA/ONE_MINUS_SRC_ALPHA drawn blended after the opaque parts without depth write, `CAdd`
      SRC_ALPHA/ONE additive, alpha test GREATER 64 cut out; GT6 materials are almost all opaque (glass too: its look
      is in the shader). **Vertex occlusion**: GT6 `colorSet1` darkens the parts (View > Vertex occlusion, on;
      `--no-ao`). The R18's fine stripes are its carbon texture (32x32 tiled ~50 times, alpha mask), not a decoding error.
-   **To check by the user**
+   Checked by the user.
 
-## Next
-
-- 9c. GT car data -> Forza Studio (export JSON / CSV + FM4 field mapping), see item 9.
 ## Closed by the user on 2026-10-19 (12, 11.1, 11.2)
 
 12. **Readable object names in ZModeler** (user: "mi piacerebbe assai"; closed: "ci siamo") — ZModeler 2.2.6 ignores OBJ `o`/`g` and
