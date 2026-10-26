@@ -47,6 +47,10 @@ public sealed class MainForm : Form
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("&Export visible to OBJ...", null, (_, _) => ExportObj()) { ShortcutKeys = Keys.Control | Keys.E });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export the whole &car to OBJ (hq, race, cockpit, wheels, all LOD levels)...", null, (_, _) => ExportObj(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.E });
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export visible to &FBX (hierarchy, all LOD levels) + TGA textures...", null, (_, _) => ExportFbx()) { ShortcutKeys = Keys.Control | Keys.F });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export the whole car to FBX (hq, race, cockpit, wheels) + TGA textures...", null, (_, _) => ExportFbx(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.F });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export all &textures of this file (TGA)...", null, (_, _) => ExportTextures()));
+        fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("E&xit", null, (_, _) => Close()));
         var viewMenu = new ToolStripMenuItem("&View");
         viewMenu.DropDownItems.Add(wireItem);
@@ -448,5 +452,44 @@ public sealed class MainForm : Form
         }
         catch (Exception e) { status.Text = "Export failed: " + e.Message; }
         finally { Cursor = Cursors.Default; }
+    }
+
+    void ExportFbx(bool wholeCar = false)
+    {
+        if (doc == null) return;
+        string stem = System.Text.RegularExpressions.Regex.Replace(
+            ObjMaterials.Clean(docTitle != null ? docTitle.Split(" - ")[0] : Path.GetFileName(doc.Path)), "_+", "_");
+        using var dlg = new SaveFileDialog
+        {
+            Title = wholeCar ? "Export the whole car to FBX: name\name_hq.fbx, name_race.fbx, name_cockpit.fbx, name_wheel_...fbx + name\textures" : "Export the visible shapes to FBX (textures in a 'textures' folder next to it)",
+            Filter = "Autodesk FBX|*.fbx",
+            FileName = stem + ".fbx",
+            OverwritePrompt = !wholeCar,
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            Cursor = Cursors.WaitCursor;
+            if (!wholeCar)
+            {
+                var counts = FbxExport.Write(doc, dlg.FileName);
+                status.Text = $"Exported {dlg.FileName}: {string.Join(", ", counts.Select((c, k) => $"LOD{k} {c} shapes"))}";
+                return;
+            }
+            string dir = Path.GetDirectoryName(dlg.FileName)!, name = Path.GetFileNameWithoutExtension(dlg.FileName);
+            var parts = FbxExport.WriteCar(doc, renderer, dir, name);
+            status.Text = $"Exported to {Path.Combine(dir, name)}: {string.Join(" | ", parts)}";
+        }
+        catch (Exception e) { status.Text = "Export failed: " + e.Message; }
+        finally { Cursor = Cursors.Default; }
+    }
+
+    void ExportTextures()
+    {
+        if (doc == null) return;
+        using var dlg = new FolderBrowserDialog { Description = "Export every texture of this file (TGA) into this folder", UseDescriptionForTitle = true };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try { status.Text = $"{FbxExport.WriteAllTextures(doc, dlg.SelectedPath)} textures (TGA) written to {dlg.SelectedPath}"; }
+        catch (Exception e) { status.Text = "Export failed: " + e.Message; }
     }
 }

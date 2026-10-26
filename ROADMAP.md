@@ -6,6 +6,13 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
+(empty)
+
+## Suspended
+
+9. **Car data (all of item 9, 9c included)** — suspended by the user on 2026-10-26 ("9 tutto sospeso e dopo"); resume later.
+   Left: 9a (gears, suspension, brakes, aero, tyre compounds in the car sheet), 9b (GT5 sheet), 9c Forza Studio import.
+
 9c. GT car data -> Forza Studio (export JSON / CSV + FM4 field mapping), see item 9.
    - [x] analysis (2026-10-19, user: "analizza il db del gioco ... considera sempre Supra RZ, 97 in GT6 e 98 in FM4"):
      `gtdev car-data gt6 / fm4 / cmp`, mapping in `docs/car_data.md`, 9 cars in both games (`tests\car_data`).
@@ -23,6 +30,17 @@ Tests and dumps: `tests\<topic>` (not committed).
 ## Next
 
 (empty)
+
+## Closed by the user on 2026-10-26 (14)
+
+14. **FBX with hierarchy + TGA textures** (closed 2026-10-26: "fbx ok"; user 2026-10-25: "esportazione in fbx con mantenimento della gerarchia ... tutte le texture
+   e tutti i mesh ... le texture vanno bene in TGA"; same writer as Forza Studio's FBX export, 3ds Max round trip checked there)
+   - [x] a. `GTFormats/Fbx` (FbxFile binary 7.4 read/write, FbxBuilder with Texture records, Tga) + `GTViewer/FbxExport.cs`: scene
+     `name > LOD0..N > model > Maya groups > shape (mesh)`, one GT material per mesh (colour, diffuse texture), hidden parts and
+     switches as shown. File > Export visible to FBX (Ctrl+F), whole car (Ctrl+Shift+F: one FBX per hq / race / cockpit / wheel,
+     all LOD levels inside, textures once in `name\textures`), Export all textures of this file (TGA). `--shot ... --fbx f.fbx |
+     --fbx-car dir\name | --tga-all dir`. Checked off screen on GT6 MX-5 and R18 (read back: models, meshes, triangles, parents).
+   - [x] b. user check (2026-10-26: "fbx ok").
 
 ## Closed by the user on 2026-10-19 (13)
 

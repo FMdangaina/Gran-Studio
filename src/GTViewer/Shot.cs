@@ -21,7 +21,7 @@ static class Shot
         int lod = 0, paint = -1;
         bool flat = false;
         var sets = new List<(int, int)>();
-        string? objPath = null, lodsDir = null, carDir = null;
+        string? objPath = null, lodsDir = null, carDir = null, fbxPath = null, fbxCarDir = null, tgaDir = null;
         HashSet<int>? only = null;
         for (int i = 3; i < args.Length; i++)
             switch (args[i])
@@ -37,6 +37,9 @@ static class Shot
                 case "--obj": objPath = args[++i]; break;
                 case "--obj-lods": lodsDir = args[++i]; break;
                 case "--obj-car": carDir = args[++i]; break;
+                case "--fbx": fbxPath = args[++i]; break;
+                case "--fbx-car": fbxCarDir = args[++i]; break;
+                case "--tga-all": tgaDir = args[++i]; break;
                 case "--paint": paint = int.Parse(args[++i]); break;
                 case "--only": only = args[++i].Split(',').Select(int.Parse).ToHashSet(); break;
             }
@@ -60,6 +63,10 @@ static class Shot
         if (objPath != null) ObjExport.Write(doc, objPath);   // the same export as File > Export visible to OBJ
         if (lodsDir != null) ObjExport.WriteAllLods(doc, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(lodsDir))!, System.IO.Path.GetFileName(lodsDir));   // ... all LOD levels
         List<string> car = carDir == null ? [] : ObjExport.WriteCar(doc, renderer, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(carDir))!, System.IO.Path.GetFileName(carDir));   // ... the whole car
+        List<string> fbx = [];
+        if (fbxPath != null) fbx.Add($"fbx: {string.Join(", ", FbxExport.Write(doc, fbxPath).Select((c, k) => $"LOD{k} {c}"))} -> {fbxPath}");
+        if (fbxCarDir != null) fbx.AddRange(FbxExport.WriteCar(doc, renderer, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(fbxCarDir))!, System.IO.Path.GetFileName(fbxCarDir)).Select(x => "fbx car: " + x));
+        if (tgaDir != null) fbx.Add($"tga: {FbxExport.WriteAllTextures(doc, tgaDir)} textures -> {tgaDir}");
         var shapes = doc.VisibleShapes().ToList();
         int failed = shapes.Count(n => doc.Mesh(n.Shape, out _) == null);
         File.WriteAllLines(System.IO.Path.ChangeExtension(output, ".txt"),
@@ -69,6 +76,7 @@ static class Shot
             $"box {min} .. {max}",
             $"paint {doc.Paint}/{doc.Paints.Count}: {(doc.Paint >= 0 ? doc.Paints[doc.Paint].Name : "-")}, variation {doc.TextureSet.Variation} of {doc.TextureSet.VariationCount}",
             .. car.Select(x => "car export: " + x),
+            .. fbx,
             $"colour sources (shapes):{string.Join(", ", shapes.GroupBy(n => doc.TextureSet.Look(doc.MaterialOf(n.Shape)).ColorSource).Select(g => $"{g.Key} {g.Count()}"))}",
             .. doc.Scene.Selectors.Select(s => $"switch [{s.Id}] {s.Name} = {doc.State[s.Id]}"),
             .. shapes.Select(n => (n, f: doc.Mesh(n.Shape, out var why) == null ? why : null)).Where(x => x.f != null).Select(x => $"no mesh: s{x.n.Shape} {x.n.Name}: {x.f}"),

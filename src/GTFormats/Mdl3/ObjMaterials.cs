@@ -101,6 +101,8 @@ public sealed class ObjMaterials(Mdl3File file, Mdl3TextureSet textures, ObjText
     }
 
     /// <summary>Level 0 of an image, saved in the texture folder under its texture name (file name in that folder).</summary>
+    public string? TextureFile(int image, ObjTextureFolder textureFolder) => Texture(image, textureFolder);
+
     string? Texture(int image, ObjTextureFolder textureFolder)
     {
         if (written.TryGetValue(image, out var f)) return f;
@@ -123,15 +125,17 @@ public sealed class ObjTextureFolder(string directory)
 {
     public string Directory { get; } = directory;
     public Action<string, byte[], int, int> Save { get; set; } = (_, _, _, _) => { };
+    /// <summary>File extension of the saved textures: .png (the OBJ export) or .tga (the FBX export).</summary>
+    public string Extension { get; set; } = ".png";
     readonly Dictionary<string, string> hashes = new(StringComparer.OrdinalIgnoreCase);   // file name -> pixel hash
 
-    /// <summary>Saves the pixels as stem.png (stem_2.png... when the name holds other pixels), returns the file name.</summary>
+    /// <summary>Saves the pixels as stem + Extension (stem_2... when the name holds other pixels), returns the file name.</summary>
     public string Add(string stem, byte[] rgba, int w, int h)
     {
         string hash = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(rgba)) + w;
         for (int k = 1; ; k++)
         {
-            string f = k == 1 ? stem + ".png" : $"{stem}_{k}.png";
+            string f = k == 1 ? stem + Extension : $"{stem}_{k}{Extension}";
             if (hashes.TryGetValue(f, out var h0))
             {
                 if (h0 == hash) return f;
@@ -144,7 +148,7 @@ public sealed class ObjTextureFolder(string directory)
         }
     }
 
-    /// <summary>An 8x8 PNG of one colour (colour_RRGGBB.png).</summary>
+    /// <summary>An 8x8 image of one colour (colour_RRGGBB).</summary>
     public string Swatch(System.Numerics.Vector3 c)
     {
         byte R(float v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
