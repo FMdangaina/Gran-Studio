@@ -13,6 +13,12 @@ It reads files from an already extracted game volume; it ships no game data.
 | `docs/` | Format notes, verified findings only |
 | `ROADMAP.md` | What is being worked on now and next |
 
+## Requirements
+
+Windows 10 / 11 x64 with the **.NET 9 Desktop Runtime**
+(https://dotnet.microsoft.com/download/dotnet/9.0, "Desktop Runtime", x64). The release zip is framework-dependent
+on purpose, so it stays small (about 2 MB).
+
 ## Build
 
 .NET 9 SDK, `dotnet build GTViewer.sln`.
