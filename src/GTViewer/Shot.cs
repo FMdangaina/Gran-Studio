@@ -21,7 +21,7 @@ static class Shot
         int lod = 0, paint = -1;
         bool flat = false;
         var sets = new List<(int, int)>();
-        string? objPath = null, lodsDir = null, carDir = null, fbxPath = null, fbxCarDir = null, tgaDir = null;
+        string? objPath = null, lodsDir = null, carDir = null, fbxPath = null, fbxCarDir = null, tgaDir = null, gltfCarDir = null;
         HashSet<int>? only = null;
         for (int i = 3; i < args.Length; i++)
             switch (args[i])
@@ -39,6 +39,7 @@ static class Shot
                 case "--obj-car": carDir = args[++i]; break;
                 case "--fbx": fbxPath = args[++i]; break;
                 case "--fbx-car": fbxCarDir = args[++i]; break;
+                case "--gltf-car": gltfCarDir = args[++i]; break;
                 case "--tga-all": tgaDir = args[++i]; break;
                 case "--paint": paint = int.Parse(args[++i]); break;
                 case "--only": only = args[++i].Split(',').Select(int.Parse).ToHashSet(); break;
@@ -66,6 +67,7 @@ static class Shot
         List<string> fbx = [];
         if (fbxPath != null) fbx.Add($"fbx: {string.Join(", ", FbxExport.Write(doc, fbxPath).Select((c, k) => $"LOD{k} {c}"))} -> {fbxPath}");
         if (fbxCarDir != null) fbx.AddRange(FbxExport.WriteCar(doc, renderer, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(fbxCarDir))!, System.IO.Path.GetFileName(fbxCarDir)).Select(x => "fbx car: " + x));
+        if (gltfCarDir != null) fbx.AddRange(FbxExport.WriteCar(doc, renderer, System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(gltfCarDir))!, System.IO.Path.GetFileName(gltfCarDir), ".glb").Select(x => "gltf car: " + x));
         if (tgaDir != null) fbx.Add($"tga: {FbxExport.WriteAllTextures(doc, tgaDir)} textures -> {tgaDir}");
         var shapes = doc.VisibleShapes().ToList();
         int failed = shapes.Count(n => doc.Mesh(n.Shape, out _) == null);

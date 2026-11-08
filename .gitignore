@@ -12,6 +12,9 @@ obj/
 
 # Game data and anything derived from it: never commit Gran Turismo content
 # (MDL3, TXS3, VOL, exports, decoded textures, dumps).
+# extracted game volumes copied next to the repo
+GT5_VOL/
+GT6_VOL/
 *.vol
 *.VOL
 *.mdl

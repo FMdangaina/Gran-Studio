@@ -13,12 +13,14 @@ namespace GTFormats.Fbx
         public Vector3 Color = new Vector3(0.8f);
         public string TextureFile;        // full path of the texture file, or null
         public string TextureRelative;    // the same relative to the FBX file
+        public byte[] Rgba;               // the texture pixels (RGBA, top row first) for formats that embed it (glTF), or null
+        public int Width, Height;
     }
 
     // Writes an FBX scene (binary 7.4, the layout 3ds Max and Blender read): Null models for the hierarchy and Mesh
     // models with one material each, normals and UV per corner. Units: meters (UnitScaleFactor 100), Y up, as the
     // game data; UV are "v up" (OpenGL), the importers expect that.
-    public sealed class FbxBuilder
+    public sealed class FbxBuilder : ISceneBuilder
     {
         private readonly FbxNode objects = new FbxNode("Objects");
         private readonly FbxNode connections = new FbxNode("Connections");

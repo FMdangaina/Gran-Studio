@@ -11,6 +11,7 @@ if (args.Length == 0)
     Console.WriteLine("  mdl3-fvf <files.tsv> <groupRegex> <out.txt>   check vertex formats, decode plain positions vs bbox");
     Console.WriteLine("  mdl3-obj <file> <out.obj> [--all-models]   shapes as OBJ (readable names, one file per LOD) + MTL + PNG, stats in <out>.txt");
     Console.WriteLine("  mdl3-gltf <file> <out.gltf> [--all-models]   the same as glTF with the node hierarchy, one file per LOD");
+    Console.WriteLine("  gltf-check <file.glb|dir>...                  reread exported .glb files and check them (GTViewer glTF export)");
     Console.WriteLine("  mdl3-tree <file> [out.txt]   bones, VM registers and model command streams with shape names");
     Console.WriteLine("  mdl3-preview <file> <out.png> [x|y|z] [shapeRegex] [--lod N] [--all-models] [--size N]   shaded PNG view of the decoded shapes");
     Console.WriteLine("  mdl3-normals <files.tsv> <groupRegex> <out.txt>   vertex normals vs triangle winding, per LOD level");
@@ -44,6 +45,7 @@ return args[0] switch
     "mdl3-fvf" => Mdl3FvfCheck.Run(args[1..]),
     "mdl3-obj" => Mdl3Obj.Run(args[1..]),
     "mdl3-gltf" => Mdl3Gltf.Run(args[1..]),
+    "gltf-check" => GltfCheckAll(args[1..]),
     "mdl3-tree" => Mdl3Tree.Run(args[1..]),
     "mdl3-preview" => Mdl3Preview.Run(args[1..]),
     "mdl3-normals" => Mdl3Normals.Run(args[1..]),
@@ -86,4 +88,17 @@ static int Unknown(string cmd)
 {
     Console.Error.WriteLine($"Unknown command: {cmd}");
     return 1;
+}
+
+static int GltfCheckAll(string[] paths)
+{
+    int bad = 0;
+    foreach (var f in paths.SelectMany(p => Directory.Exists(p) ? Directory.GetFiles(p, "*.glb", SearchOption.AllDirectories) : [p]))
+    {
+        string r;
+        try { r = GTFormats.Fbx.GltfBuilder.Check(File.ReadAllBytes(f)); } catch (Exception e) { r = "FAIL " + e.Message; }
+        if (r.StartsWith("FAIL")) bad++;
+        Console.WriteLine($"{f}: {r}");
+    }
+    return bad == 0 ? 0 : 1;
 }

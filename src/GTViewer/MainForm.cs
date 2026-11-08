@@ -49,7 +49,9 @@ public sealed class MainForm : Form
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export visible to &FBX (hierarchy, all LOD levels) + TGA textures...", null, (_, _) => ExportFbx()) { ShortcutKeys = Keys.Control | Keys.F });
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export the whole car to FBX (hq, race, cockpit, wheels) + TGA textures...", null, (_, _) => ExportFbx(true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.F });
-        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export all &textures of this file (TGA)...", null, (_, _) => ExportTextures()));
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export visible to gl&TF .glb (hierarchy, all LOD levels, textures inside)...", null, (_, _) => ExportFbx(false, true)) { ShortcutKeys = Keys.Control | Keys.B });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export the whole car to glTF .glb (hq, race, cockpit, wheels)...", null, (_, _) => ExportFbx(true, true)) { ShortcutKeys = Keys.Control | Keys.Shift | Keys.B });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("Export &all textures of this file (TGA)...", null, (_, _) => ExportTextures()));
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("E&xit", null, (_, _) => Close()));
         var viewMenu = new ToolStripMenuItem("&View");
@@ -454,16 +456,19 @@ public sealed class MainForm : Form
         finally { Cursor = Cursors.Default; }
     }
 
-    void ExportFbx(bool wholeCar = false)
+    void ExportFbx(bool wholeCar = false, bool gltf = false)
     {
         if (doc == null) return;
         string stem = System.Text.RegularExpressions.Regex.Replace(
             ObjMaterials.Clean(docTitle != null ? docTitle.Split(" - ")[0] : Path.GetFileName(doc.Path)), "_+", "_");
+        string ext = gltf ? ".glb" : ".fbx";
         using var dlg = new SaveFileDialog
         {
-            Title = wholeCar ? "Export the whole car to FBX: name\name_hq.fbx, name_race.fbx, name_cockpit.fbx, name_wheel_...fbx + name\textures" : "Export the visible shapes to FBX (textures in a 'textures' folder next to it)",
-            Filter = "Autodesk FBX|*.fbx",
-            FileName = stem + ".fbx",
+            Title = gltf
+                ? (wholeCar ? "Export the whole car to glTF: name\\name_hq.glb, name_race.glb, name_cockpit.glb, name_wheel_...glb (textures inside)" : "Export the visible shapes to glTF binary (textures inside the .glb)")
+                : (wholeCar ? "Export the whole car to FBX: name\\name_hq.fbx, name_race.fbx, name_cockpit.fbx, name_wheel_...fbx + name\\textures" : "Export the visible shapes to FBX (textures in a 'textures' folder next to it)"),
+            Filter = gltf ? "glTF 2.0 binary|*.glb" : "Autodesk FBX|*.fbx",
+            FileName = stem + ext,
             OverwritePrompt = !wholeCar,
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -477,7 +482,7 @@ public sealed class MainForm : Form
                 return;
             }
             string dir = Path.GetDirectoryName(dlg.FileName)!, name = Path.GetFileNameWithoutExtension(dlg.FileName);
-            var parts = FbxExport.WriteCar(doc, renderer, dir, name);
+            var parts = FbxExport.WriteCar(doc, renderer, dir, name, ext);
             status.Text = $"Exported to {Path.Combine(dir, name)}: {string.Join(" | ", parts)}";
         }
         catch (Exception e) { status.Text = "Export failed: " + e.Message; }

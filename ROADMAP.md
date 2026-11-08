@@ -6,7 +6,16 @@ Tests and dumps: `tests\<topic>` (not committed).
 
 ## Now
 
-(empty)
+15. **glTF export** (user 2026-11-08: "ormai l'ultimo grido è gltf", as in Forza Studio).
+   - [x] `GTFormats/Fbx/GltfBuilder.cs`: glTF 2.0 binary (.glb) through the same calls as the FBX builder
+     (`ISceneBuilder`), so the hierarchy is the FBX one (`name > LOD0..N > model node tree > shape`); textures inside
+     the .glb as opaque PNG; same file kept in sync with PGR4DEV `tools/shared`.
+   - [x] GTViewer: File > Export visible to glTF (Ctrl+B), whole car to glTF (Ctrl+Shift+B); `--shot ... --fbx x.glb`,
+     `--gltf-car dir\name`. `gtdev gltf-check <file|dir>` rereads and checks the files.
+   - [x] Off screen: GT5 hq 00010075 (whole car), GT6 0012/0001 (whole car), GT6 0001/0012 hq (3 LODs, 152,637
+     triangles): all OK, shape counts per LOD equal to the FBX export. Tests in `tests\gltf`.
+   - [x] Released in 0.1.1.
+   - [ ] User check: open a .glb in ZModeler / Blender (textures, hierarchy).
 
 ## Suspended
 

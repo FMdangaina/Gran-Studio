@@ -17,22 +17,39 @@ static class FbxExport
     const string TextureFolderName = "textures";
 
     /// <summary>One FBX file with every LOD level of the open model: dir\stem.fbx and dir\textures\*.tga. Returns the shapes per level.</summary>
+    /// <remarks>A path ending in .glb writes glTF 2.0 binary instead (user 2026-11-08, as Forza Studio): same hierarchy,
+    /// textures inside the .glb as PNG, no textures folder.</remarks>
     public static List<int> Write(ViewerDocument doc, string fbxPath, ObjTextureFolder? textures = null)
     {
         string dir = Path.GetDirectoryName(Path.GetFullPath(fbxPath))!, stem = Path.GetFileNameWithoutExtension(fbxPath);
-        textures ??= Folder(dir);
-        var builder = new FbxBuilder("GTViewer: " + Path.GetFileName(doc.Path));
+        bool gltf = IsGltf(fbxPath);
+        textures ??= gltf ? Embedded(dir) : Folder(dir);
+        ISceneBuilder builder = gltf ? new GltfBuilder("GTViewer: " + Path.GetFileName(doc.Path)) : new FbxBuilder("GTViewer: " + Path.GetFileName(doc.Path));
         var counts = Fill(doc, builder, 0, stem, textures, dir);
         File.WriteAllBytes(fbxPath, builder.ToBytes());
         return counts;
     }
 
+    public static bool IsGltf(string path) => Path.GetExtension(path).Equals(".glb", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The texture folder of an FBX export: <c>dir\textures</c>, TGA.</summary>
     public static ObjTextureFolder Folder(string dir) =>
         new(Path.Combine(dir, TextureFolderName)) { Extension = ".tga", Save = (path, rgba, w, h) => Tga.Write(path, rgba, w, h) };
 
+    /// <summary>pixels kept by a glTF texture "folder" (nothing on disk), by full path</summary>
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ObjTextureFolder, Dictionary<string, (byte[] Rgba, int W, int H)>> pixels = new();
+
+    /// <summary>The texture "folder" of a glTF export: names as the FBX one, pixels kept in memory for the .glb.</summary>
+    public static ObjTextureFolder Embedded(string dir)
+    {
+        var map = new Dictionary<string, (byte[] Rgba, int W, int H)>(StringComparer.OrdinalIgnoreCase);
+        var folder = new ObjTextureFolder(Path.Combine(dir, TextureFolderName)) { Extension = ".png", Save = (path, rgba, w, h) => map[Path.GetFullPath(path)] = (rgba, w, h) };
+        pixels.Add(folder, map);
+        return folder;
+    }
+
     /// <summary>Adds the model under a root Null named <paramref name="name"/> (0 = scene root): one LOD node per level.</summary>
-    static List<int> Fill(ViewerDocument doc, FbxBuilder builder, long parent, string name, ObjTextureFolder textures, string fbxDir)
+    static List<int> Fill(ViewerDocument doc, ISceneBuilder builder, long parent, string name, ObjTextureFolder textures, string fbxDir)
     {
         var materials = new ObjMaterials(doc.File, doc.TextureSet, textures);
         var fbxMaterials = new Dictionary<int, FbxMaterial>();
@@ -50,6 +67,7 @@ static class FbxExport
             {
                 m.TextureFile = Path.GetFullPath(Path.Combine(textures.Directory, file));
                 m.TextureRelative = Path.GetRelativePath(fbxDir, m.TextureFile);
+                if (pixels.TryGetValue(textures, out var map) && map.TryGetValue(m.TextureFile, out var px)) (m.Rgba, m.Width, m.Height) = px;
             }
             return fbxMaterials[mi] = m;
         }
@@ -101,16 +119,16 @@ static class FbxExport
     /// <summary>
     /// The whole car by its code, from any of its files (the parts of <see cref="ObjExport.WriteCar"/>): one FBX per part in
     /// &lt;dir&gt;\&lt;name&gt;\ (name_hq.fbx, name_race.fbx, name_cockpit.fbx, name_wheel_hq.fbx ...), each with all its LOD
-    /// levels as nodes, and the textures of all of them once in &lt;dir&gt;\&lt;name&gt;\textures (TGA).
+    /// levels as nodes, and the textures of all of them once in &lt;dir&gt;\&lt;name&gt;\textures (TGA). ext ".glb" = glTF binary, textures inside each file.
     /// </summary>
-    public static List<string> WriteCar(ViewerDocument doc, Renderer renderer, string dir, string name)
+    public static List<string> WriteCar(ViewerDocument doc, Renderer renderer, string dir, string name, string ext = ".fbx")
     {
         string root = Path.Combine(dir, name);
         Directory.CreateDirectory(root);
-        var textures = Folder(root);
+        var textures = IsGltf(ext) ? Embedded(root) : Folder(root);
         var car = CarCatalog.FromModelPath(doc.Path);
         var report = new List<string>();
-        if (car == null) { report.Add($"{name}.fbx: levels {Levels(Write(doc, Path.Combine(root, name + ".fbx"), textures))}"); return report; }
+        if (car == null) { report.Add($"{name}{ext}: levels {Levels(Write(doc, Path.Combine(root, name + ext), textures))}"); return report; }
         void Add(string what, string? file, string stem)
         {
             if (file != null) report.Add($"{what}: {Part(file, stem)}");
@@ -134,7 +152,7 @@ static class FbxExport
                 var d = part ?? doc;
                 if (part != null && doc.Paint >= 0 && part.Paints.Count == doc.Paints.Count) part.SetPaint(doc.Paint);
                 if (!d.VisibleShapes().Any()) return $"no shapes in {Path.GetFileName(Path.GetDirectoryName(file))}\\{Path.GetFileName(file)}, not exported";
-                return stem + ".fbx " + Levels(Write(d, Path.Combine(root, stem + ".fbx"), textures));
+                return stem + ext + " " + Levels(Write(d, Path.Combine(root, stem + ext), textures));
             }
             catch (Exception e) { return $"not exported ({e.Message})"; }
         }
